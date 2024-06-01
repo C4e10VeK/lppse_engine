@@ -16,7 +16,7 @@ impl Debug for Surface {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Surface")
             .field("raw", &self.raw)
-            .field("surface_fn", &"")
+            .field("surface_fn", &std::ptr::addr_of!(self.surface_fn))
             .field("instance", &self.instance)
             .finish()
     }
@@ -32,7 +32,11 @@ impl Surface {
 
         let surface_fn = ash::khr::surface::Instance::new(&instance.entry(), &instance.handle());
 
-        Ok(Rc::new(Self { raw, surface_fn, instance }))
+        Ok(Rc::new(Self {
+            raw,
+            surface_fn,
+            instance,
+        }))
     }
 
     pub fn get_physical_device_surface_support(

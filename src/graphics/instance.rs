@@ -2,8 +2,6 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
-use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-
 pub struct Instance {
     entry: ash::Entry,
     instance: ash::Instance,
@@ -34,7 +32,10 @@ impl Drop for Instance {
 
 impl Debug for Instance {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Instance").finish()
+        f.debug_struct("Instance")
+            .field("entry", &std::ptr::addr_of!(self.entry))
+            .field("instance", &self.instance.handle())
+            .finish()
     }
 }
 
@@ -143,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_instance_creation() -> Result<(), InstanceBuildError> {
-        let instance = InstanceBuilder::new()
+        let _ = InstanceBuilder::new()
             .application_name("hello world")
             .application_version(10)
             .api_version(ash::vk::API_VERSION_1_3)
@@ -152,5 +153,21 @@ mod tests {
             .build()?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_debug_format() {
+        let instance = InstanceBuilder::new()
+            .application_name("hello world")
+            .application_version(10)
+            .api_version(ash::vk::API_VERSION_1_3)
+            .extensions(vec![])
+            .layers(vec![])
+            .build()
+            .unwrap();
+
+        let instance_string = format!("{:?}", instance);
+
+        println!("{instance_string}");
     }
 }
