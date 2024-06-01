@@ -1,9 +1,10 @@
-use graphics::State;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::platform::windows::{Color, WindowExtWindows};
+use winit::platform::windows::WindowExtWindows;
 use winit::window::{Window, WindowButtons, WindowId};
+
+use graphics::State;
 
 mod graphics;
 mod utils;
