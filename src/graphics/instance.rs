@@ -1,3 +1,4 @@
+use ash::vk;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
@@ -18,6 +19,42 @@ impl Instance {
 
     pub fn entry(&self) -> ash::Entry {
         self.entry.clone()
+    }
+
+    pub fn enumerate_physical_devices(&self) -> ash::prelude::VkResult<Vec<vk::PhysicalDevice>> {
+        unsafe { self.instance.enumerate_physical_devices() }
+    }
+
+    pub fn get_physical_device_properties(
+        &self,
+        physical_device: vk::PhysicalDevice,
+    ) -> vk::PhysicalDeviceProperties {
+        unsafe {
+            self.instance
+                .get_physical_device_properties(physical_device)
+        }
+    }
+
+    pub fn get_physical_device_queue_family_properties(
+        &self,
+        physical_device: vk::PhysicalDevice,
+    ) -> Vec<vk::QueueFamilyProperties> {
+        unsafe {
+            self.instance
+                .get_physical_device_queue_family_properties(physical_device)
+        }
+    }
+
+    pub fn create_device(
+        &self,
+        physical_device: vk::PhysicalDevice,
+        create_info: &vk::DeviceCreateInfo<'_>,
+        allocation_callbacks: Option<&vk::AllocationCallbacks<'_>>,
+    ) -> ash::prelude::VkResult<ash::Device> {
+        unsafe {
+            self.instance
+                .create_device(physical_device, create_info, allocation_callbacks)
+        }
     }
 }
 
@@ -100,7 +137,7 @@ impl InstanceBuilder {
 
         let app_name = std::ffi::CString::new(self.application_name).unwrap();
 
-        let app_info = ash::vk::ApplicationInfo::default()
+        let app_info = vk::ApplicationInfo::default()
             .application_name(&app_name)
             .engine_name(&app_name)
             .application_version(self.application_version)

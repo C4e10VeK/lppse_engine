@@ -3,12 +3,13 @@ use self::{
     instance::{Instance, InstanceBuilder},
     surface::Surface,
 };
-use super::{APP_NAME, APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_PATCH_VERSION};
+use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};
+use crate::graphics::debug_utils::DebugUtilsMessengerCallbackData;
 use crate::utils::gfx::enumerate_required_extensions;
+use crate::utils::make_version;
 use ash::vk;
 use std::rc::Rc;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use crate::utils::make_version;
 
 mod debug_utils;
 mod instance;
@@ -62,18 +63,46 @@ impl State {
             .expect("Error while create instance");
 
         let debug_utils = cfg!(feature = "gfx_debug_msg").then_some(
-            DebugUtilsBuilder::new()
-                .debug_utils_callback(unsafe {
-                    DebugUtilsCallback::new(move |severity, message_type, data| {
-                        println!("{:?}::{:?}: {}", severity, message_type, data.message)
-                    })
-                })
+            DebugUtilsBuilder::default()
                 .build(instance.clone())
                 .expect("Error while create DebugUtilsMessenger"),
         );
 
-        let surface = Surface::from_window(instance.clone(), handle)
-            .expect("Error while create surface");
+        let surface =
+            Surface::from_window(instance.clone(), handle).expect("Error while create surface");
+
+        let (physical_device, properties, queue_family_index) = instance
+            .enumerate_physical_devices()
+            .unwrap()
+            .into_iter()
+            .filter_map(|pd| {
+                let properties = instance.get_physical_device_properties(pd);
+                instance
+                    .get_physical_device_queue_family_properties(pd)
+                    .into_iter()
+                    .enumerate()
+                    .find(|(index, qfp)| {
+                        qfp.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+                            && surface
+                                .get_physical_device_surface_support(pd, *index as u32)
+                                .unwrap()
+                    })
+                    .map(|(index, _)| (pd, properties, index as u32))
+            })
+            .min_by_key(|(pd, properties, _)| match properties.device_type {
+                vk::PhysicalDeviceType::DISCRETE_GPU => 0,
+                vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+                vk::PhysicalDeviceType::VIRTUAL_GPU => 2,
+                vk::PhysicalDeviceType::CPU => 3,
+                vk::PhysicalDeviceType::OTHER => 4,
+                _ => 5,
+            })
+            .expect("No device available");
+
+        println!(
+            "Selected device: {}",
+            properties.device_name_as_c_str().unwrap().to_str().unwrap()
+        );
 
         Self {
             instance,

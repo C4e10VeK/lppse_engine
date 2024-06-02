@@ -53,16 +53,14 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         let window = match self.window.as_mut() {
             None => return,
-            Some(window) => window
+            Some(window) => window,
         };
 
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
-            },
-            WindowEvent::RedrawRequested => {
-                println!("redraw requested called: {:?}", window)
             }
+            WindowEvent::RedrawRequested => {}
             _ => {}
         }
     }

@@ -40,6 +40,7 @@ impl Debug for DebugUtils {
 }
 
 impl Drop for DebugUtils {
+    #[inline]
     fn drop(&mut self) {
         unsafe {
             self.debug_instance
@@ -63,6 +64,27 @@ pub struct DebugUtilsMessengerCallbackData<'a> {
     pub message_id_name: Option<&'a str>,
     pub message_id_number: i32,
     pub message: &'a str,
+}
+
+impl<'a> From<vk::DebugUtilsMessengerCallbackDataEXT<'_>> for DebugUtilsMessengerCallbackData<'a> {
+    fn from(value: vk::DebugUtilsMessengerCallbackDataEXT<'_>) -> Self {
+        let vk::DebugUtilsMessengerCallbackDataEXT {
+            p_message_id_name,
+            message_id_number,
+            p_message,
+            ..
+        } = value;
+
+        unsafe {
+            Self {
+                message_id_name: p_message_id_name
+                    .as_ref()
+                    .map(|t| std::ffi::CStr::from_ptr(t).to_str().unwrap()),
+                message_id_number,
+                message: std::ffi::CStr::from_ptr(p_message).to_str().unwrap(),
+            }
+        }
+    }
 }
 
 pub struct DebugUtilsCallback(CallbackFn);
@@ -166,34 +188,25 @@ impl DebugUtilsBuilder {
     }
 }
 
-#[no_mangle]
-unsafe extern "system" fn raw_debug_callback(
+pub(self) unsafe extern "system" fn raw_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_types: vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT<'_>,
-    p_user_data: *mut c_void,
+    _: *mut c_void,
 ) -> vk::Bool32 {
     let _ = catch_unwind(AssertUnwindSafe(move || {
-        if p_user_data.is_null() { return; }
+        let raw_callback_data = *p_callback_data;
 
-        let vk::DebugUtilsMessengerCallbackDataEXT {
-            p_message_id_name,
-            message_id_number,
-            p_message,
-            ..
-        } = *p_callback_data;
+        let data = DebugUtilsMessengerCallbackData::from(raw_callback_data);
 
-        let data = DebugUtilsMessengerCallbackData {
-            message_id_name: p_message_id_name
-                .as_ref()
-                .map(|t| std::ffi::CStr::from_ptr(t).to_str().unwrap()),
-            message_id_number,
-            message: std::ffi::CStr::from_ptr(p_message).to_str().unwrap(),
-        };
+        println!(
+            "[{:?}::{:?}]: {}",
+            message_severity, message_types, data.message
+        );
 
-        let user_callback: &CallbackFn = &*p_user_data.cast_const().cast();
+        // let user_callback: &CallbackFn = &*p_user_data.cast_const().cast();
 
-        user_callback(message_severity, message_types, data);
+        // user_callback(message_severity, message_types, data);
     }));
 
     vk::FALSE
@@ -220,13 +233,7 @@ mod tests {
     fn test_create_debug_utils() {
         let instance = create_instance();
 
-        let debug_utils = DebugUtilsBuilder::new()
-            .debug_utils_callback(unsafe {
-                DebugUtilsCallback::new(move |ext1, ext2, data| {
-                    println!("{:?}::{:?}: {}", ext1, ext2, data.message);
-                })
-            })
-            .build(instance.clone());
+        let debug_utils = DebugUtilsBuilder::new().build(instance.clone());
 
         assert!(debug_utils.is_ok());
     }
@@ -235,8 +242,7 @@ mod tests {
     fn test_create_debug_utils_without_callback() {
         let instance = create_instance();
 
-        let debug_utils = DebugUtilsBuilder::new()
-            .build(instance.clone());
+        let debug_utils = DebugUtilsBuilder::new().build(instance.clone());
 
         assert!(debug_utils.is_ok());
     }
@@ -245,14 +251,7 @@ mod tests {
     fn test_debug_format() {
         let instance = create_instance();
 
-        let debug_utils = DebugUtilsBuilder::new()
-            .debug_utils_callback(unsafe {
-                DebugUtilsCallback::new(move |ext1, ext2, data| {
-                    println!("{:?}::{:?}: {}", ext1, ext2, data.message);
-                })
-            })
-            .build(instance.clone())
-            .unwrap();
+        let debug_utils = DebugUtilsBuilder::new().build(instance.clone()).unwrap();
 
         let debug_utils_string = format!("{:?}", debug_utils);
 
