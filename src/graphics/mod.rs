@@ -5,6 +5,7 @@ use self::{
     surface::Surface,
 };
 use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};
+use crate::graphics::device::{DeviceBuilder, QueueDescription};
 use crate::utils::gfx::enumerate_required_extensions;
 use crate::utils::make_version;
 use ash::vk;
@@ -17,14 +18,14 @@ mod instance;
 mod surface;
 
 #[derive(Debug)]
-pub struct State {
-    instance: Rc<Instance>,
-    _debug_utils: Option<DebugUtils>,
-    surface: Rc<Surface>,
+pub struct GraphicsState {
     device: Rc<Device>,
+    surface: Rc<Surface>,
+    _debug_utils: Option<DebugUtils>,
+    instance: Rc<Instance>,
 }
 
-impl State {
+impl GraphicsState {
     pub fn new<T>(handle: &T) -> Self
     where
         T: HasDisplayHandle + HasWindowHandle,
@@ -100,25 +101,24 @@ impl State {
             })
             .expect("No device available");
 
-        let queue_create_infos = vk::DeviceQueueCreateInfo::default()
+        let queue_description = QueueDescription::new()
             .queue_family_index(queue_family_index)
-            .queue_priorities(&[1.0f32]);
-
-        let device_extensions = [ash::khr::swapchain::NAME.as_ptr()];
+            .priority(vec![1.0f32]);
 
         let device_features = vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
 
-        let binding = [queue_create_infos];
-        let device_create_info = vk::DeviceCreateInfo::default()
-            .queue_create_infos(&binding)
-            .enabled_extension_names(&device_extensions)
-            .enabled_features(&device_features);
-
-        let result = instance
-            .create_device(physical_device.handle(), &device_create_info)
+        let device = DeviceBuilder::new()
+            .queues(vec![queue_description])
+            .extensions(vec![ash::khr::swapchain::NAME
+                .to_str()
+                .unwrap()
+                .to_string()])
+            .features(device_features)
+            .push_extend(
+                vk::PhysicalDeviceDynamicRenderingFeatures::default().dynamic_rendering(true),
+            )
+            .build(instance.clone(), physical_device)
             .expect("Error while create device");
-
-        let device = Rc::new(Device::new(result));
 
         Self {
             instance,

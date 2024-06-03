@@ -3,7 +3,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowButtons, WindowId};
 
-use graphics::State;
+use graphics::GraphicsState;
 
 mod graphics;
 mod utils;
@@ -24,7 +24,7 @@ fn main() {
 #[derive(Debug, Default)]
 struct App {
     window: Option<Window>,
-    state: Option<State>,
+    state: Option<GraphicsState>,
 }
 
 impl App {
@@ -43,18 +43,13 @@ impl ApplicationHandler for App {
 
         let window = event_loop.create_window(window_attributes).expect("");
 
-        let state = State::new(&window);
+        let state = GraphicsState::new(&window);
 
         self.window = Some(window);
         self.state = Some(state);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        let window = match self.window.as_mut() {
-            None => return,
-            Some(window) => window,
-        };
-
         match event {
             WindowEvent::CloseRequested => {
                 self.state = None;

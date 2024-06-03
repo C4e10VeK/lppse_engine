@@ -1,10 +1,8 @@
+use super::device::PhysicalDevice;
+use ash::vk;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-
-use ash::vk;
-
-use crate::graphics::device::PhysicalDevice;
 
 pub struct Instance {
     entry: ash::Entry,
@@ -12,7 +10,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(entry: ash::Entry, instance: ash::Instance) -> Self {
+    fn new(entry: ash::Entry, instance: ash::Instance) -> Self {
         Self {
             entry,
             handle: instance,
