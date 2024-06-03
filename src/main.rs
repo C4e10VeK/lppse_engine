@@ -1,7 +1,6 @@
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::platform::windows::WindowExtWindows;
 use winit::window::{Window, WindowButtons, WindowId};
 
 use graphics::State;
@@ -16,7 +15,7 @@ const APP_PATCH_VERSION: &str = env!("CARGO_PKG_VERSION_PATCH");
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 
 fn main() {
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::builder().build().unwrap();
     let mut app = App::new();
 
     event_loop.run_app(&mut app).unwrap();
@@ -58,6 +57,7 @@ impl ApplicationHandler for App {
 
         match event {
             WindowEvent::CloseRequested => {
+                self.state = None;
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {}

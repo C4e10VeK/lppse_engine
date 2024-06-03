@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
+use crate::graphics::device::PhysicalDevice;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use super::instance::Instance;
@@ -23,7 +24,7 @@ impl Debug for Surface {
 }
 
 impl Surface {
-    pub fn from_window<T>(instance: Rc<Instance>, handle: &T) -> ash::prelude::VkResult<Rc<Self>>
+    pub fn from_window<T>(instance: Rc<Instance>, handle: &T) -> ash::prelude::VkResult<Self>
     where
         T: HasDisplayHandle + HasWindowHandle,
     {
@@ -32,11 +33,11 @@ impl Surface {
 
         let surface_fn = ash::khr::surface::Instance::new(&instance.entry(), &instance.handle());
 
-        Ok(Rc::new(Self {
+        Ok(Self {
             handle,
             surface_fn,
             instance,
-        }))
+        })
     }
 
     pub fn handle(&self) -> ash::vk::SurfaceKHR {
@@ -45,12 +46,12 @@ impl Surface {
 
     pub fn get_physical_device_surface_support(
         &self,
-        physical_device: ash::vk::PhysicalDevice,
+        physical_device: &PhysicalDevice,
         queue_index: u32,
     ) -> ash::prelude::VkResult<bool> {
         unsafe {
             self.surface_fn.get_physical_device_surface_support(
-                physical_device,
+                physical_device.handle(),
                 queue_index,
                 self.handle,
             )
@@ -59,8 +60,8 @@ impl Surface {
 }
 
 impl Drop for Surface {
-    #[inline]
     fn drop(&mut self) {
+        println!(stringify!(Surface::drop()));
         unsafe { self.surface_fn.destroy_surface(self.handle, None) };
     }
 }

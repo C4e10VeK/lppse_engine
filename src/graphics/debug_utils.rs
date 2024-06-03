@@ -40,8 +40,8 @@ impl Debug for DebugUtils {
 }
 
 impl Drop for DebugUtils {
-    #[inline]
     fn drop(&mut self) {
+        println!(stringify!(DebugUtils::drop()));
         unsafe {
             self.debug_instance
                 .destroy_debug_utils_messenger(self.debug_utils_messenger, None);
