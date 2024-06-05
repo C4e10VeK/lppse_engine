@@ -24,7 +24,7 @@ fn main() {
 #[derive(Debug, Default)]
 struct App {
     window: Option<Window>,
-    state: Option<GraphicsState>,
+    graphics_state: Option<GraphicsState>,
 }
 
 impl App {
@@ -42,17 +42,17 @@ impl ApplicationHandler for App {
             .with_enabled_buttons(WindowButtons::MINIMIZE | WindowButtons::CLOSE);
 
         let window = event_loop.create_window(window_attributes).expect("");
-
-        let state = GraphicsState::new(&window);
+        
+        let graphics_state = GraphicsState::new(&window);
 
         self.window = Some(window);
-        self.state = Some(state);
+        self.graphics_state = Some(graphics_state);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
-                self.state = None;
+                self.graphics_state = None;
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {}

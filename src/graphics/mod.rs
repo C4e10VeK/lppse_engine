@@ -1,13 +1,15 @@
 use self::device::Device;
 use self::{
     debug_utils::{DebugUtils, DebugUtilsBuilder},
+    device::{DeviceBuilder, QueueDescription},
     instance::{Instance, InstanceBuilder},
     surface::Surface,
+    swapchain::{Swapchain, SwapchainDescription, SwapchainImageDescription},
 };
 use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};
-use crate::graphics::device::{DeviceBuilder, QueueDescription};
+use crate::graphics::device::Queue;
 use crate::utils::gfx::enumerate_required_extensions;
-use crate::utils::make_version;
+use crate::utils::{IntoExtent2D, make_version};
 use ash::vk;
 use std::rc::Rc;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -16,9 +18,12 @@ mod debug_utils;
 mod device;
 mod instance;
 mod surface;
+mod swapchain;
 
 #[derive(Debug)]
 pub struct GraphicsState {
+    swapchain: Rc<Swapchain>,
+    queue: Queue,
     device: Rc<Device>,
     surface: Rc<Surface>,
     _debug_utils: Option<DebugUtils>,
@@ -26,12 +31,9 @@ pub struct GraphicsState {
 }
 
 impl GraphicsState {
-    pub fn new<T>(handle: &T) -> Self
-    where
-        T: HasDisplayHandle + HasWindowHandle,
-    {
+    pub fn new(window: &winit::window::Window) -> Self {
         let required_extensions: Vec<_> = {
-            let mut res = enumerate_required_extensions(handle).unwrap();
+            let mut res = enumerate_required_extensions(window).unwrap();
 
             if cfg!(feature = "gfx_debug_msg") {
                 res.push(ash::ext::debug_utils::NAME.to_str().unwrap().to_string());
@@ -72,7 +74,7 @@ impl GraphicsState {
         );
 
         let surface = Rc::new(
-            Surface::from_window(instance.clone(), handle).expect("Error while create surface"),
+            Surface::from_window(instance.clone(), window).expect("Error while create surface"),
         );
 
         let (physical_device, queue_family_index) = instance
@@ -87,7 +89,7 @@ impl GraphicsState {
                         qfp.queue_flags.contains(vk::QueueFlags::GRAPHICS)
                             && surface
                                 .get_physical_device_surface_support(&pd, *index as u32)
-                                .unwrap()
+                                .unwrap_or(false)
                     })
                     .map(|(index, _)| (pd, index as u32))
             })
@@ -107,7 +109,7 @@ impl GraphicsState {
 
         let device_features = vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
 
-        let device = DeviceBuilder::new()
+        let (device, mut queues) = DeviceBuilder::new()
             .queues(vec![queue_description])
             .extensions(vec![ash::khr::swapchain::NAME
                 .to_str()
@@ -120,11 +122,61 @@ impl GraphicsState {
             .build(instance.clone(), physical_device)
             .expect("Error while create device");
 
+        let queue = queues.next().unwrap();
+
+        let cpas = device.get_surface_capabilities(&surface);
+        let present_mode = {
+            let modes = device
+                .get_surface_present_modes(&surface);
+            
+            modes.into_iter()
+                .find(|x| *x == vk::PresentModeKHR::MAILBOX)
+                .unwrap()
+        };
+
+        let image_format = {
+            let formats = device
+                .get_surface_formats(&surface);
+            
+            formats.into_iter()
+                .find(|x| x.format == vk::Format::R8G8B8A8_SRGB && x.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR)
+                .unwrap()
+        };
+
+        let image_description = SwapchainImageDescription {
+            format: image_format.format,
+            color_space: image_format.color_space,
+            extent: window.inner_size().into_extent(),
+            array_layers: 1,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+        };
+
+        let swapchain = {
+            let swapchain = Swapchain::new(
+                device.clone(),
+                &surface,
+                SwapchainDescription {
+                    image_description,
+                    present_mode,
+                    min_image_count: cpas.min_image_count + 1,
+                    queue_indices: vec![queue.family_index()],
+                    pre_transform: cpas.current_transform,
+                    composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+                    ..Default::default()
+                },
+            ).expect("Error while create swapchain");
+            
+            Rc::new(swapchain)
+        };
+
         Self {
             instance,
             _debug_utils,
             surface,
             device,
+            queue,
+            swapchain,
         }
     }
 }

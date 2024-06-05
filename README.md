@@ -3,4 +3,6 @@
 ## Game engine for stylized games with old graphics
 
 ### TODO
-TODO ...
+- [ ] Vulkan image wrapper
+  - [ ] Image view creation
+- [ ] ...

@@ -1,6 +1,8 @@
+use ash::prelude::VkResult;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
+use crate::graphics::surface::Surface;
 use ash::vk;
 
 use super::instance::Instance;
@@ -8,14 +10,49 @@ use super::instance::Instance;
 pub struct Device {
     handle: ash::Device,
     swap_chain_fns: ash::khr::swapchain::Device,
+    physical_device: vk::PhysicalDevice,
 }
 
 impl Device {
-    pub fn new(handle: ash::Device, swap_chain_fns: ash::khr::swapchain::Device) -> Self {
+    fn new(
+        handle: ash::Device,
+        swap_chain_fns: ash::khr::swapchain::Device,
+        physical_device: vk::PhysicalDevice,
+    ) -> Self {
         Self {
             handle,
             swap_chain_fns,
+            physical_device,
         }
+    }
+
+    pub fn get_surface_capabilities(&self, surface: &Surface) -> vk::SurfaceCapabilitiesKHR {
+        surface
+            .get_physical_device_surface_capabilities(self.physical_device)
+            .unwrap()
+    }
+
+    pub fn get_surface_formats(&self, surface: &Surface) -> Vec<vk::SurfaceFormatKHR> {
+        surface
+            .get_physical_device_surface_formats(self.physical_device)
+            .unwrap()
+    }
+
+    pub fn get_surface_present_modes(&self, surface: &Surface) -> Vec<vk::PresentModeKHR> {
+        surface
+            .get_physical_device_surface_present_modes(self.physical_device)
+            .unwrap()
+    }
+
+    pub fn create_swapchain(
+        &self,
+        create_info: &vk::SwapchainCreateInfoKHR<'_>,
+    ) -> VkResult<vk::SwapchainKHR> {
+        unsafe { self.swap_chain_fns.create_swapchain(create_info, None) }
+    }
+
+    pub fn destroy_swapchain(&self, swapchain: vk::SwapchainKHR) {
+        unsafe { self.swap_chain_fns.destroy_swapchain(swapchain, None) }
     }
 }
 
@@ -23,6 +60,8 @@ impl Debug for Device {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Device")
             .field("handle", &self.handle.handle())
+            .field("swap_chain_fns", &std::ptr::addr_of!(self.swap_chain_fns))
+            .field("physical_device", &self.physical_device)
             .finish()
     }
 }
@@ -34,6 +73,31 @@ impl Drop for Device {
             self.handle.device_wait_idle().unwrap();
             self.handle.destroy_device(None);
         }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Queue {
+    handle: vk::Queue,
+    family_index: u32,
+    index: u32,
+}
+
+impl Queue {
+    fn new(handle: vk::Queue, family_index: u32, index: u32) -> Self {
+        Self {
+            handle,
+            family_index,
+            index,
+        }
+    }
+
+    pub fn handle(&self) -> vk::Queue {
+        self.handle
+    }
+
+    pub fn family_index(&self) -> u32 {
+        self.family_index
     }
 }
 
@@ -100,7 +164,7 @@ impl<'a> DeviceBuilder<'a> {
         self,
         instance: Rc<Instance>,
         physical_device: PhysicalDevice,
-    ) -> ash::prelude::VkResult<Rc<Device>> {
+    ) -> ash::prelude::VkResult<(Rc<Device>, impl ExactSizeIterator<Item = Queue>)> {
         let extensions: Vec<_> = self
             .extensions
             .into_iter()
@@ -133,11 +197,37 @@ impl<'a> DeviceBuilder<'a> {
             device_create_info
         };
 
-        let device = instance.create_device(physical_device.handle(), &device_create_info)?;
+        let device = {
+            let device = instance.create_device(physical_device.handle, &device_create_info)?;
+            let swap_chain_fns = ash::khr::swapchain::Device::new(&instance.handle(), &device);
+            Rc::new(Device::new(device, swap_chain_fns, physical_device.handle))
+        };
 
-        let swap_chain_fns = ash::khr::swapchain::Device::new(&instance.handle(), &device);
+        let queue_infos: Vec<_> = {
+            let temp = self
+                .queues
+                .iter()
+                .map(|x| (x.queue_family_index, 0..x.priority.len() as u32));
 
-        Ok(Rc::new(Device::new(device, swap_chain_fns)))
+            let mut queue_infos = vec![];
+            for (family_index, indices) in temp {
+                for x in indices {
+                    queue_infos.push((family_index, x));
+                }
+            }
+
+            queue_infos
+        };
+
+        let queues = {
+            let device_for_iter = device.clone();
+            queue_infos.into_iter().map(move |(family, index)| {
+                let queue = unsafe { device_for_iter.handle.get_device_queue(family, index) };
+                Queue::new(queue, family, index)
+            })
+        };
+
+        Ok((device, queues))
     }
 }
 
