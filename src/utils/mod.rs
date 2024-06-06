@@ -6,11 +6,8 @@ pub trait IntoExtent2D {
 
 impl<T: Into<u32>> IntoExtent2D for winit::dpi::PhysicalSize<T> {
     fn into_extent(self) -> ash::vk::Extent2D {
-        let winit::dpi::PhysicalSize {
-            width,
-            height,
-        } = self;
-        
+        let winit::dpi::PhysicalSize { width, height } = self;
+
         ash::vk::Extent2D {
             width: width.into(),
             height: height.into(),

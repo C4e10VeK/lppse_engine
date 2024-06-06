@@ -1,10 +1,12 @@
 use super::device::Device;
 use super::surface::Surface;
+use super::texture::swapchain_image::SwapchainImage;
 use ash::vk;
 use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Swapchain {
+    images: Vec<SwapchainImage>,
     handle: vk::SwapchainKHR,
     device: Rc<Device>,
 
@@ -43,12 +45,34 @@ impl Swapchain {
 
         let swapchain = device.create_swapchain(&create_info)?;
 
+        let extent = description.image_description.extent;
+        let image_extent = vk::Extent3D {
+            width: extent.width,
+            height: extent.height,
+            depth: 0,
+        };
+
+        let images = device
+            .get_swapchain_images(swapchain)
+            .expect("Error while get swapchain images")
+            .into_iter()
+            .map(|image| {
+                SwapchainImage::new(
+                    device.clone(),
+                    image,
+                    description.image_description.format,
+                    image_extent,
+                )
+            })
+            .collect();
+
         Ok(Self {
+            images,
             handle: swapchain,
             device,
             image_format: description.image_description.format,
             present_mode: description.present_mode,
-            extent: description.image_description.extent,
+            extent,
         })
     }
 }

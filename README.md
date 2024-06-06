@@ -3,6 +3,9 @@
 ## Game engine for stylized games with old graphics
 
 ### TODO
-- [ ] Vulkan image wrapper
-  - [ ] Image view creation
-- [ ] ...
+- [X] Vulkan image wrapper
+  - [X] Image view creation
+- [ ] Rendering commands
+  - [ ] Synchronization (semaphore, fence)
+  - [ ] Frames change
+  - [ ] Dynamic rendering

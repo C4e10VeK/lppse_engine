@@ -18,8 +18,9 @@ impl Surface {
     where
         T: HasDisplayHandle + HasWindowHandle,
     {
-        let handle =
-            unsafe { utils::gfx::create_surface(&instance.entry(), &instance.handle(), window_handle) }?;
+        let handle = unsafe {
+            utils::gfx::create_surface(&instance.entry(), &instance.handle(), window_handle)
+        }?;
 
         let surface_fn = ash::khr::surface::Instance::new(&instance.entry(), &instance.handle());
 

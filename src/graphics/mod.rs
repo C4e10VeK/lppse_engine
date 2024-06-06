@@ -9,7 +9,7 @@ use self::{
 use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};
 use crate::graphics::device::Queue;
 use crate::utils::gfx::enumerate_required_extensions;
-use crate::utils::{IntoExtent2D, make_version};
+use crate::utils::{make_version, IntoExtent2D};
 use ash::vk;
 use std::rc::Rc;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -19,6 +19,7 @@ mod device;
 mod instance;
 mod surface;
 mod swapchain;
+mod texture;
 
 #[derive(Debug)]
 pub struct GraphicsState {
@@ -126,20 +127,23 @@ impl GraphicsState {
 
         let cpas = device.get_surface_capabilities(&surface);
         let present_mode = {
-            let modes = device
-                .get_surface_present_modes(&surface);
-            
-            modes.into_iter()
+            let modes = device.get_surface_present_modes(&surface);
+
+            modes
+                .into_iter()
                 .find(|x| *x == vk::PresentModeKHR::MAILBOX)
                 .unwrap()
         };
 
         let image_format = {
-            let formats = device
-                .get_surface_formats(&surface);
-            
-            formats.into_iter()
-                .find(|x| x.format == vk::Format::R8G8B8A8_SRGB && x.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR)
+            let formats = device.get_surface_formats(&surface);
+
+            formats
+                .into_iter()
+                .find(|x| {
+                    x.format == vk::Format::R8G8B8A8_SRGB
+                        && x.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+                })
                 .unwrap()
         };
 
@@ -165,8 +169,9 @@ impl GraphicsState {
                     composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
                     ..Default::default()
                 },
-            ).expect("Error while create swapchain");
-            
+            )
+            .expect("Error while create swapchain");
+
             Rc::new(swapchain)
         };
 

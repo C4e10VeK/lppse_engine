@@ -44,6 +44,10 @@ impl Device {
             .unwrap()
     }
 
+    pub fn get_swapchain_images(&self, swapchain: vk::SwapchainKHR) -> VkResult<Vec<vk::Image>> {
+        unsafe { self.swap_chain_fns.get_swapchain_images(swapchain) }
+    }
+
     pub fn create_swapchain(
         &self,
         create_info: &vk::SwapchainCreateInfoKHR<'_>,
@@ -52,7 +56,38 @@ impl Device {
     }
 
     pub fn destroy_swapchain(&self, swapchain: vk::SwapchainKHR) {
-        unsafe { self.swap_chain_fns.destroy_swapchain(swapchain, None) }
+        unsafe {
+            self.swap_chain_fns.destroy_swapchain(swapchain, None);
+        }
+    }
+
+    pub fn create_image(&self, create_info: &vk::ImageCreateInfo<'_>) -> VkResult<vk::Image> {
+        unsafe { self.handle.create_image(create_info, None) }
+    }
+
+    pub fn destroy_image(&self, image: vk::Image) {
+        unsafe {
+            self.handle.destroy_image(image, None);
+        }
+    }
+
+    pub fn create_image_view(
+        &self,
+        create_info: &vk::ImageViewCreateInfo<'_>,
+    ) -> VkResult<vk::ImageView> {
+        unsafe { self.handle.create_image_view(create_info, None) }
+    }
+
+    pub fn destroy_image_view(&self, image_view: vk::ImageView) {
+        unsafe {
+            self.handle.destroy_image_view(image_view, None);
+        }
+    }
+
+    pub fn destroy_sampler(&self, sampler: vk::Sampler) {
+        unsafe {
+            self.handle.destroy_sampler(sampler, None);
+        }
     }
 }
 
