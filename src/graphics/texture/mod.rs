@@ -1,11 +1,11 @@
-use super::device::Device;
+use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
+use ash::prelude::VkResult;
 use ash::vk;
-use std::ops::Deref;
 use std::rc::Rc;
 
 pub mod swapchain_image;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Image {
     extent: vk::Extent3D,
     image: vk::Image,
@@ -16,8 +16,20 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn new() -> Self {
-        todo!()
+    pub fn image(&self) -> vk::Image {
+        self.image
+    }
+
+    pub fn image_view(&self) -> vk::ImageView {
+        self.image_view
+    }
+
+    pub fn sampler(&self) -> Option<vk::Sampler> {
+        self.sampler
+    }
+    
+    pub fn extent(&self) -> vk::Extent3D {
+        self.extent
     }
 }
 
@@ -77,6 +89,48 @@ impl Default for ImageDescription {
             properties: vk::MemoryPropertyFlags::default(),
             level_count: 1,
             layer_count: 1,
+        }
+    }
+}
+
+impl DeviceCreateExtend<vk::ImageCreateInfo<'_>, vk::Image> for Device {
+    fn create(&self, create_info: &vk::ImageCreateInfo<'_>) -> VkResult<vk::Image> {
+        unsafe { self.handle().create_image(create_info, None) }
+    }
+}
+
+impl DeviceDestroyExtend<vk::Image> for Device {
+    fn destroy(&self, vk_struct: vk::Image) {
+        unsafe {
+            self.handle().destroy_image(vk_struct, None);
+        }
+    }
+}
+
+impl DeviceCreateExtend<vk::ImageViewCreateInfo<'_>, vk::ImageView> for Device {
+    fn create(&self, create_info: &vk::ImageViewCreateInfo<'_>) -> VkResult<vk::ImageView> {
+        unsafe { self.handle().create_image_view(create_info, None) }
+    }
+}
+
+impl DeviceDestroyExtend<vk::ImageView> for Device {
+    fn destroy(&self, vk_struct: vk::ImageView) {
+        unsafe {
+            self.handle().destroy_image_view(vk_struct, None);
+        }
+    }
+}
+
+impl DeviceCreateExtend<vk::SamplerCreateInfo<'_>, vk::Sampler> for Device {
+    fn create(&self, create_info: &vk::SamplerCreateInfo<'_>) -> VkResult<vk::Sampler> {
+        unsafe { self.handle().create_sampler(create_info, None) }
+    }
+}
+
+impl DeviceDestroyExtend<vk::Sampler> for Device {
+    fn destroy(&self, vk_struct: vk::Sampler) {
+        unsafe {
+            self.handle().destroy_sampler(vk_struct, None);
         }
     }
 }

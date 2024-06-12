@@ -1,7 +1,13 @@
-use super::device::Device;
+use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
 use super::surface::Surface;
+use super::synchronization::semaphore::Semaphore;
 use super::texture::swapchain_image::SwapchainImage;
+use crate::debug_log;
+use crate::utils::IntoExtent3D;
+use ash::prelude::VkResult;
 use ash::vk;
+use std::cell::RefCell;
+use std::ops::{Add, Deref};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -13,6 +19,7 @@ pub struct Swapchain {
     image_format: vk::Format,
     present_mode: vk::PresentModeKHR,
     extent: vk::Extent2D,
+    current_image: u32,
 }
 
 impl Swapchain {
@@ -20,7 +27,7 @@ impl Swapchain {
         device: Rc<Device>,
         surface: &Surface,
         description: SwapchainDescription,
-    ) -> ash::prelude::VkResult<Self> {
+    ) -> VkResult<Self> {
         let create_info = {
             let mut create_info = vk::SwapchainCreateInfoKHR::default()
                 .surface(surface.handle())
@@ -43,16 +50,12 @@ impl Swapchain {
             create_info
         };
 
-        let swapchain = device.create_swapchain(&create_info)?;
+        let swapchain = device.create(&create_info)?;
 
         let extent = description.image_description.extent;
-        let image_extent = vk::Extent3D {
-            width: extent.width,
-            height: extent.height,
-            depth: 0,
-        };
+        let image_extent = extent.into_extent3d();
 
-        let images = device
+        let images: Vec<_> = device
             .get_swapchain_images(swapchain)
             .expect("Error while get swapchain images")
             .into_iter()
@@ -73,13 +76,52 @@ impl Swapchain {
             image_format: description.image_description.format,
             present_mode: description.present_mode,
             extent,
+            current_image: 0,
         })
+    }
+    
+    pub fn handle(&self) -> vk::SwapchainKHR {
+        self.handle
+    }
+
+    pub fn get_current_image(&mut self, present_semaphore: &Semaphore) -> VkResult<(SwapchainImage, u32)> {
+        let (index, _suboptimal) = unsafe {
+            self.device.swapchain_fns().acquire_next_image(
+                self.handle,
+                u64::MAX,
+                present_semaphore.handle(),
+                vk::Fence::null(),
+            )?
+        };
+
+        let image = self.images[index as usize].clone();
+        self.current_image = index;
+
+        Ok((image, index))
     }
 }
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
-        self.device.destroy_swapchain(self.handle);
+        debug_log!(stringify!(Swapchain::drop()));
+        for image in &self.images {
+            image.destroy();
+        }
+        self.device.destroy(self.handle);
+    }
+}
+
+impl DeviceCreateExtend<vk::SwapchainCreateInfoKHR<'_>, vk::SwapchainKHR> for Device {
+    fn create(&self, create_info: &vk::SwapchainCreateInfoKHR<'_>) -> VkResult<vk::SwapchainKHR> {
+        unsafe { self.swapchain_fns().create_swapchain(create_info, None) }
+    }
+}
+
+impl DeviceDestroyExtend<vk::SwapchainKHR> for Device {
+    fn destroy(&self, vk_struct: vk::SwapchainKHR) {
+        unsafe {
+            self.swapchain_fns().destroy_swapchain(vk_struct, None);
+        }
     }
 }
 

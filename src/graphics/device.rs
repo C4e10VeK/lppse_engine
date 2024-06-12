@@ -3,27 +3,53 @@ use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 use crate::graphics::surface::Surface;
+use crate::debug_log;
 use ash::vk;
 
 use super::instance::Instance;
 
 pub struct Device {
     handle: ash::Device,
-    swap_chain_fns: ash::khr::swapchain::Device,
+    instance: Rc<Instance>,
+    swapchain_fns: ash::khr::swapchain::Device,
+    dynamic_rendering_fns: ash::khr::dynamic_rendering::Device,
     physical_device: vk::PhysicalDevice,
 }
 
 impl Device {
     fn new(
         handle: ash::Device,
-        swap_chain_fns: ash::khr::swapchain::Device,
+        instance: Rc<Instance>,
+        swapchain_fns: ash::khr::swapchain::Device,
+        dynamic_rendering_fns: ash::khr::dynamic_rendering::Device,
         physical_device: vk::PhysicalDevice,
     ) -> Self {
         Self {
             handle,
-            swap_chain_fns,
+            instance,
+            swapchain_fns,
+            dynamic_rendering_fns,
             physical_device,
         }
+    }
+
+    pub fn default_extensions() -> Vec<String> {
+        vec![
+            "VK_KHR_swapchain".to_owned(),
+            "VK_KHR_dynamic_rendering".to_owned(),
+        ]
+    }
+    
+    pub fn handle(&self) -> ash::Device {
+        self.handle.clone()
+    }
+    
+    pub fn instance(&self) -> Rc<Instance> {
+        self.instance.clone()
+    }
+    
+    pub fn swapchain_fns(&self) -> ash::khr::swapchain::Device {
+        self.swapchain_fns.clone()
     }
 
     pub fn get_surface_capabilities(&self, surface: &Surface) -> vk::SurfaceCapabilitiesKHR {
@@ -45,49 +71,11 @@ impl Device {
     }
 
     pub fn get_swapchain_images(&self, swapchain: vk::SwapchainKHR) -> VkResult<Vec<vk::Image>> {
-        unsafe { self.swap_chain_fns.get_swapchain_images(swapchain) }
+        unsafe { self.swapchain_fns.get_swapchain_images(swapchain) }
     }
-
-    pub fn create_swapchain(
-        &self,
-        create_info: &vk::SwapchainCreateInfoKHR<'_>,
-    ) -> VkResult<vk::SwapchainKHR> {
-        unsafe { self.swap_chain_fns.create_swapchain(create_info, None) }
-    }
-
-    pub fn destroy_swapchain(&self, swapchain: vk::SwapchainKHR) {
-        unsafe {
-            self.swap_chain_fns.destroy_swapchain(swapchain, None);
-        }
-    }
-
-    pub fn create_image(&self, create_info: &vk::ImageCreateInfo<'_>) -> VkResult<vk::Image> {
-        unsafe { self.handle.create_image(create_info, None) }
-    }
-
-    pub fn destroy_image(&self, image: vk::Image) {
-        unsafe {
-            self.handle.destroy_image(image, None);
-        }
-    }
-
-    pub fn create_image_view(
-        &self,
-        create_info: &vk::ImageViewCreateInfo<'_>,
-    ) -> VkResult<vk::ImageView> {
-        unsafe { self.handle.create_image_view(create_info, None) }
-    }
-
-    pub fn destroy_image_view(&self, image_view: vk::ImageView) {
-        unsafe {
-            self.handle.destroy_image_view(image_view, None);
-        }
-    }
-
-    pub fn destroy_sampler(&self, sampler: vk::Sampler) {
-        unsafe {
-            self.handle.destroy_sampler(sampler, None);
-        }
+    
+    pub fn wait_idle(&self) -> VkResult<()> {
+        unsafe { self.handle.device_wait_idle() }
     }
 }
 
@@ -95,7 +83,7 @@ impl Debug for Device {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Device")
             .field("handle", &self.handle.handle())
-            .field("swap_chain_fns", &std::ptr::addr_of!(self.swap_chain_fns))
+            .field("swap_chain_fns", &std::ptr::addr_of!(self.swapchain_fns))
             .field("physical_device", &self.physical_device)
             .finish()
     }
@@ -103,25 +91,35 @@ impl Debug for Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        println!(stringify!(Device::drop()));
+        debug_log!(stringify!(Device::drop()));
         unsafe {
-            self.handle.device_wait_idle().unwrap();
+            self.wait_idle().unwrap();
             self.handle.destroy_device(None);
         }
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+pub trait DeviceCreateExtend<TInfo, TTarget> {
+    fn create(&self, create_info: &TInfo) -> VkResult<TTarget>;
+}
+
+pub trait DeviceDestroyExtend<T> {
+    fn destroy(&self, vk_struct: T);
+}
+
+#[derive(Debug, Clone)]
 pub struct Queue {
     handle: vk::Queue,
+    device: Rc<Device>,
     family_index: u32,
     index: u32,
 }
 
 impl Queue {
-    fn new(handle: vk::Queue, family_index: u32, index: u32) -> Self {
+    fn new(handle: vk::Queue,  device: Rc<Device>, family_index: u32, index: u32) -> Self {
         Self {
             handle,
+            device,
             family_index,
             index,
         }
@@ -165,7 +163,6 @@ impl PhysicalDevice {
     }
 }
 
-#[derive(Default)]
 pub struct DeviceBuilder<'a> {
     pub extensions: Vec<String>,
     pub features: vk::PhysicalDeviceFeatures,
@@ -173,23 +170,32 @@ pub struct DeviceBuilder<'a> {
     pub queues: Vec<QueueDescription>,
 }
 
+impl<'a> Default for DeviceBuilder<'a>  {
+    fn default() -> Self {
+        Self {
+            extensions: Device::default_extensions(),
+            features: vk::PhysicalDeviceFeatures::default(),
+            extends: Vec::default(),
+            queues: Vec::default()
+        }
+    }
+}
+
 impl<'a> DeviceBuilder<'a> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn extensions(mut self, extensions: Vec<String>) -> Self {
-        self.extensions = extensions;
-        self
-    }
     pub fn features(mut self, features: vk::PhysicalDeviceFeatures) -> Self {
         self.features = features;
         self
     }
+
     pub fn push_extend<T: vk::ExtendsDeviceCreateInfo + 'a>(mut self, extend: T) -> Self {
         self.extends.push(Box::new(extend));
         self
     }
+
     pub fn queues(mut self, queues: Vec<QueueDescription>) -> Self {
         self.queues = queues;
         self
@@ -199,7 +205,7 @@ impl<'a> DeviceBuilder<'a> {
         self,
         instance: Rc<Instance>,
         physical_device: PhysicalDevice,
-    ) -> ash::prelude::VkResult<(Rc<Device>, impl ExactSizeIterator<Item = Queue>)> {
+    ) -> VkResult<(Rc<Device>, impl ExactSizeIterator<Item = Queue>)> {
         let extensions: Vec<_> = self
             .extensions
             .into_iter()
@@ -234,8 +240,16 @@ impl<'a> DeviceBuilder<'a> {
 
         let device = {
             let device = instance.create_device(physical_device.handle, &device_create_info)?;
-            let swap_chain_fns = ash::khr::swapchain::Device::new(&instance.handle(), &device);
-            Rc::new(Device::new(device, swap_chain_fns, physical_device.handle))
+            let swapchain_fns = ash::khr::swapchain::Device::new(&instance.handle(), &device);
+            let dynamic_rendering_fns =
+                ash::khr::dynamic_rendering::Device::new(&instance.handle(), &device);
+            Rc::new(Device::new(
+                device,
+                instance,
+                swapchain_fns,
+                dynamic_rendering_fns,
+                physical_device.handle,
+            ))
         };
 
         let queue_infos: Vec<_> = {
@@ -258,7 +272,7 @@ impl<'a> DeviceBuilder<'a> {
             let device_for_iter = device.clone();
             queue_infos.into_iter().map(move |(family, index)| {
                 let queue = unsafe { device_for_iter.handle.get_device_queue(family, index) };
-                Queue::new(queue, family, index)
+                Queue::new(queue, device_for_iter.clone(), family, index)
             })
         };
 
@@ -284,6 +298,24 @@ impl QueueDescription {
 
     pub fn priority(mut self, priority: Vec<f32>) -> Self {
         self.priority = priority;
+        self
+    }
+}
+
+pub trait DeviceExtensionPush {
+    fn push_extension(self, extension_name: impl Into<String>) -> Self;
+}
+
+impl DeviceExtensionPush for Vec<String> {
+    fn push_extension(mut self, extension_name: impl Into<String>) -> Self {
+        self.push(extension_name.into());
+        self
+    }
+}
+
+impl DeviceExtensionPush for DeviceBuilder<'_> {
+    fn push_extension(mut self, extension_name: impl Into<String>) -> Self {
+        self.extensions.push(extension_name.into());
         self
     }
 }

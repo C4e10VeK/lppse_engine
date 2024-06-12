@@ -1,10 +1,7 @@
-use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::window::{Window, WindowButtons, WindowId};
+use application::App;
+use winit::event_loop::EventLoop;
 
-use graphics::GraphicsState;
-
+mod application;
 mod graphics;
 mod utils;
 
@@ -15,49 +12,19 @@ const APP_PATCH_VERSION: &str = env!("CARGO_PKG_VERSION_PATCH");
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 
 fn main() {
+    init_logger();
+
+    log::info!("Begin launch");
     let event_loop = EventLoop::builder().build().unwrap();
     let mut app = App::new();
 
     event_loop.run_app(&mut app).unwrap();
+    log::info!("end launch");
 }
 
-#[derive(Debug, Default)]
-struct App {
-    graphics_state: Option<GraphicsState>,
-    window: Option<Window>,
-}
+#[inline]
+fn init_logger() {
+    let env_log = env_logger::Env::new().filter("LPPS_LOG");
 
-impl App {
-    fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attributes = Window::default_attributes()
-            .with_title(APP_NAME)
-            .with_transparent(true)
-            .with_resizable(false)
-            .with_enabled_buttons(WindowButtons::MINIMIZE | WindowButtons::CLOSE);
-
-        let window = event_loop.create_window(window_attributes).expect("");
-
-        let graphics_state = GraphicsState::new(&window);
-
-        self.window = Some(window);
-        self.graphics_state = Some(graphics_state);
-    }
-
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        event_loop.exit();
-
-        match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {}
-            _ => {}
-        }
-    }
+    env_logger::init_from_env(env_log);
 }

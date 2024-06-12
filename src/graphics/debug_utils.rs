@@ -1,4 +1,5 @@
 use super::instance::Instance;
+use crate::debug_log;
 use ash::vk;
 use std::ffi::c_void;
 use std::fmt::{Debug, Formatter};
@@ -9,7 +10,6 @@ pub struct DebugUtils {
     debug_instance: ash::ext::debug_utils::Instance,
     debug_utils_messenger: vk::DebugUtilsMessengerEXT,
     instance: Rc<Instance>,
-    debug_utils_callback: Option<DebugUtilsCallback>,
 }
 
 impl DebugUtils {
@@ -17,13 +17,11 @@ impl DebugUtils {
         debug_instance: ash::ext::debug_utils::Instance,
         debug_utils_messenger: vk::DebugUtilsMessengerEXT,
         instance: Rc<Instance>,
-        debug_utils_callback: Option<DebugUtilsCallback>,
     ) -> Self {
         Self {
             debug_instance,
             debug_utils_messenger,
             instance,
-            debug_utils_callback,
         }
     }
 }
@@ -34,30 +32,19 @@ impl Debug for DebugUtils {
             .field("debug_instance", &std::ptr::addr_of!(self.debug_instance))
             .field("debug_utils_messenger", &self.debug_utils_messenger)
             .field("instance", &self.instance)
-            .field("debug_utils_callback", &self.debug_utils_callback)
             .finish()
     }
 }
 
 impl Drop for DebugUtils {
     fn drop(&mut self) {
-        println!(stringify!(DebugUtils::drop()));
+        debug_log!(stringify!(DebugUtils::drop()));
         unsafe {
             self.debug_instance
                 .destroy_debug_utils_messenger(self.debug_utils_messenger, None);
         }
     }
 }
-
-type CallbackFn = Box<
-    dyn Fn(
-            vk::DebugUtilsMessageSeverityFlagsEXT,
-            vk::DebugUtilsMessageTypeFlagsEXT,
-            DebugUtilsMessengerCallbackData<'_>,
-        ) + RefUnwindSafe
-        + Send
-        + Sync,
->;
 
 #[non_exhaustive]
 pub struct DebugUtilsMessengerCallbackData<'a> {
@@ -87,41 +74,10 @@ impl<'a> From<vk::DebugUtilsMessengerCallbackDataEXT<'_>> for DebugUtilsMessenge
     }
 }
 
-pub struct DebugUtilsCallback(CallbackFn);
-
-impl Debug for DebugUtilsCallback {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DebugUtilsCallback")
-            .field("0", &self.as_ptr())
-            .finish()
-    }
-}
-
-impl DebugUtilsCallback {
-    pub unsafe fn new<T>(func: T) -> Self
-    where
-        T: Fn(
-                vk::DebugUtilsMessageSeverityFlagsEXT,
-                vk::DebugUtilsMessageTypeFlagsEXT,
-                DebugUtilsMessengerCallbackData<'_>,
-            ) + RefUnwindSafe
-            + Send
-            + Sync
-            + 'static,
-    {
-        Self(Box::new(func))
-    }
-
-    pub(self) fn as_ptr(&self) -> *const CallbackFn {
-        std::ptr::addr_of!(self.0)
-    }
-}
-
 #[derive(Debug)]
 pub struct DebugUtilsBuilder {
     pub message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     pub message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    pub debug_utils_callback: Option<DebugUtilsCallback>,
 }
 
 impl Default for DebugUtilsBuilder {
@@ -134,7 +90,6 @@ impl Default for DebugUtilsBuilder {
             message_type: vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
                 | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
                 | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
-            debug_utils_callback: None,
         }
     }
 }
@@ -157,22 +112,11 @@ impl DebugUtilsBuilder {
         self
     }
 
-    pub fn debug_utils_callback(mut self, debug_utils_callback: DebugUtilsCallback) -> Self {
-        self.debug_utils_callback = Some(debug_utils_callback);
-        self
-    }
-
     pub fn build(self, instance: Rc<Instance>) -> ash::prelude::VkResult<DebugUtils> {
-        let user_date = match self.debug_utils_callback.as_ref() {
-            None => std::ptr::null_mut(),
-            Some(data) => data.as_ptr().cast_mut().cast(),
-        };
-
         let debug_utils_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
             .message_severity(self.message_severity)
             .message_type(self.message_type)
-            .pfn_user_callback(Some(raw_debug_callback))
-            .user_data(user_date);
+            .pfn_user_callback(Some(raw_debug_callback));
 
         let debug_instance =
             ash::ext::debug_utils::Instance::new(&instance.entry(), &instance.handle());
@@ -183,7 +127,6 @@ impl DebugUtilsBuilder {
             debug_instance,
             debug_utils_messenger,
             instance,
-            self.debug_utils_callback,
         ))
     }
 }
@@ -199,14 +142,19 @@ pub(self) unsafe extern "system" fn raw_debug_callback(
 
         let data = DebugUtilsMessengerCallbackData::from(raw_callback_data);
 
-        println!(
-            "[{:?}::{:?}]: {}",
-            message_severity, message_types, data.message
-        );
-
-        // let user_callback: &CallbackFn = &*p_user_data.cast_const().cast();
-
-        // user_callback(message_severity, message_types, data);
+        match message_severity {
+            vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => {
+                log::error!(target: "rust_engine", "[{:?}::{:?}]: {}", message_severity, message_types, data.message)
+            }
+            _ => {
+                debug_log!(
+                    "[{:?}::{:?}]: {}",
+                    message_severity,
+                    message_types,
+                    data.message
+                );
+            }
+        }
     }));
 
     vk::FALSE

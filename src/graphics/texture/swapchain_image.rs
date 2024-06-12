@@ -1,10 +1,10 @@
 use super::Image;
-use crate::graphics::device::Device;
+use crate::graphics::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
 use ash::vk;
 use std::ops::Deref;
 use std::rc::Rc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SwapchainImage(Image);
 
 impl SwapchainImage {
@@ -33,7 +33,7 @@ impl SwapchainImage {
             });
 
         let image_view = device
-            .create_image_view(&image_view_info)
+            .create(&image_view_info)
             .expect("Error while create image view for swapchain image");
 
         let image_internal = Image {
@@ -47,6 +47,13 @@ impl SwapchainImage {
 
         Self(image_internal)
     }
+    
+    pub fn destroy(&self) {
+        if let Some(sampler) = self.sampler {
+            self.device.destroy(sampler);
+        }
+        self.device.destroy(self.image_view);
+    } 
 }
 
 impl Deref for SwapchainImage {
@@ -54,14 +61,5 @@ impl Deref for SwapchainImage {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Drop for SwapchainImage {
-    fn drop(&mut self) {
-        if let Some(sampler) = self.sampler {
-            self.device.destroy_sampler(sampler);
-        }
-        self.device.destroy_image_view(self.image_view);
     }
 }

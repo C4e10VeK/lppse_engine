@@ -1,6 +1,6 @@
 use super::device::PhysicalDevice;
 use super::instance::Instance;
-use crate::utils;
+use crate::{debug_log, utils};
 use ash::prelude::VkResult;
 use ash::vk;
 use std::fmt::{Debug, Formatter};
@@ -92,7 +92,7 @@ impl Debug for Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        println!(stringify!(Surface::drop()));
+        debug_log!(stringify!(Surface::drop()));
         unsafe { self.surface_fn.destroy_surface(self.handle, None) };
     }
 }
