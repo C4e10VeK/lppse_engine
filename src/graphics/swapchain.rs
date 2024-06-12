@@ -6,8 +6,6 @@ use crate::debug_log;
 use crate::utils::IntoExtent3D;
 use ash::prelude::VkResult;
 use ash::vk;
-use std::cell::RefCell;
-use std::ops::{Add, Deref};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -19,7 +17,6 @@ pub struct Swapchain {
     image_format: vk::Format,
     present_mode: vk::PresentModeKHR,
     extent: vk::Extent2D,
-    current_image: u32,
 }
 
 impl Swapchain {
@@ -76,15 +73,17 @@ impl Swapchain {
             image_format: description.image_description.format,
             present_mode: description.present_mode,
             extent,
-            current_image: 0,
         })
     }
-    
+
     pub fn handle(&self) -> vk::SwapchainKHR {
         self.handle
     }
 
-    pub fn get_current_image(&mut self, present_semaphore: &Semaphore) -> VkResult<(SwapchainImage, u32)> {
+    pub fn get_current_image(
+        &self,
+        present_semaphore: &Semaphore,
+    ) -> VkResult<(SwapchainImage, u32)> {
         let (index, _suboptimal) = unsafe {
             self.device.swapchain_fns().acquire_next_image(
                 self.handle,
@@ -95,7 +94,6 @@ impl Swapchain {
         };
 
         let image = self.images[index as usize].clone();
-        self.current_image = index;
 
         Ok((image, index))
     }

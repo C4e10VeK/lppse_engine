@@ -1,22 +1,17 @@
-use self::device::Device;
 use self::{
     debug_utils::{DebugUtils, DebugUtilsBuilder},
-    device::{DeviceBuilder, QueueDescription},
+    device::{Device, DeviceBuilder, Queue, QueueDescription},
     instance::{Instance, InstanceBuilder},
     surface::Surface,
     swapchain::{Swapchain, SwapchainDescription, SwapchainImageDescription},
-    synchronization::semaphore::Semaphore,
+    synchronization::{fence::Fence, semaphore::Semaphore},
 };
 use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};
-use crate::graphics::device::{PhysicalDevice, Queue};
 use crate::utils::gfx::enumerate_required_extensions;
 use crate::utils::{make_version, IntoExtent2D};
-use ash::prelude::VkResult;
 use ash::vk;
-use std::cell::{Cell, RefCell};
-use std::ops::DerefMut;
 use std::rc::Rc;
-use crate::graphics::synchronization::fence::Fence;
+use winit::dpi::PhysicalSize;
 
 mod debug_utils;
 mod device;
@@ -30,7 +25,7 @@ const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 #[derive(Debug)]
 pub struct GraphicsState {
-    swapchain: Rc<RefCell<Swapchain>>,
+    swapchain: Option<Swapchain>,
     queue: Queue,
     device: Rc<Device>,
     surface: Rc<Surface>,
@@ -106,12 +101,13 @@ impl GraphicsState {
 
         let queue = queues.next().unwrap();
 
-        let swapchain = create_swapchain(
-            device.clone(),
-            &queue,
-            &surface,
-            window.inner_size().into_extent(),
-        );
+        // let swapchain = create_swapchain(
+        //     device.clone(),
+        //     &queue,
+        //     &surface,
+        //     window.inner_size().into_extent(),
+        //     None,
+        // );
 
         let (present_semaphores, render_semaphores) = {
             let mut present_semaphores = vec![];
@@ -123,14 +119,14 @@ impl GraphicsState {
 
             (present_semaphores, render_semaphores)
         };
-        
+
         let fences = {
             let mut fences = vec![];
-            
+
             for _ in 0..MAX_FRAMES_IN_FLIGHT {
                 fences.push(Fence::new(device.clone(), false).unwrap());
             }
-            
+
             fences
         };
 
@@ -175,7 +171,7 @@ impl GraphicsState {
             surface,
             device,
             queue,
-            swapchain,
+            swapchain: None,
             present_semaphores,
             render_semaphores,
             fences,
@@ -185,12 +181,29 @@ impl GraphicsState {
         }
     }
 
-    pub fn render(&mut self) {
-        let mut swapchain = self.swapchain.borrow_mut();
+    pub(crate) fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.swapchain = create_swapchain(
+            self.device.clone(),
+            &self.queue,
+            &self.surface,
+            new_size.into_extent(),
+            self.swapchain.as_ref().map(|t| t.handle()),
+        );
+    }
 
-        let (current_image, image_index) = swapchain
-            .get_current_image(self.present_semaphores.get(self.current_frame as usize).unwrap())
-            .unwrap();
+    pub fn render(&mut self) {
+        let swapchain = self.swapchain.as_ref().unwrap();
+
+        let image_result = swapchain.get_current_image(
+            self.present_semaphores
+                .get(self.current_frame as usize)
+                .unwrap(),
+        );
+
+        let (current_image, image_index) = match image_result {
+            Ok(value) => value,
+            Err(_) => return,
+        };
 
         let current_command_buffer = self.command_buffers[self.current_frame as usize];
 
@@ -235,7 +248,7 @@ impl GraphicsState {
                 .store_op(vk::AttachmentStoreOp::STORE)
                 .clear_value(vk::ClearValue {
                     color: vk::ClearColorValue {
-                        float32: [0.25, 0.5, 1.0, 1.0],
+                        float32: [0.1, 0.2, 1.0, 1.0],
                     },
                 });
 
@@ -244,15 +257,15 @@ impl GraphicsState {
                 height: current_image.extent().height,
             };
             let rendering_info = vk::RenderingInfoKHR::default()
-                .render_area(
-                    vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: render_extent,
-                    })
+                .render_area(vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: render_extent,
+                })
                 .layer_count(1)
                 .color_attachments(std::slice::from_ref(&color_attachment));
-            
-            self.device.handle()
+
+            self.device
+                .handle()
                 .cmd_begin_rendering(current_command_buffer, &rendering_info);
 
             // End rendering
@@ -290,42 +303,56 @@ impl GraphicsState {
                 .end_command_buffer(current_command_buffer)
                 .unwrap();
         }
-        
-        let wait_semaphore = self.present_semaphores.get(self.current_frame as usize).unwrap().handle();
-        let signal_semaphore = self.render_semaphores.get(self.current_frame as usize).unwrap().handle();
-        let wait_stages = [
-            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-        ];
-        
+
+        let wait_semaphore = self
+            .present_semaphores
+            .get(self.current_frame as usize)
+            .unwrap()
+            .handle();
+        let signal_semaphore = self
+            .render_semaphores
+            .get(self.current_frame as usize)
+            .unwrap()
+            .handle();
+        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+
         let submit_info = vk::SubmitInfo::default()
             .wait_semaphores(std::slice::from_ref(&wait_semaphore))
             .wait_dst_stage_mask(&wait_stages)
             .command_buffers(std::slice::from_ref(&current_command_buffer))
             .signal_semaphores(std::slice::from_ref(&signal_semaphore));
-        
+
         let current_fence = self.fences.get(self.current_frame as usize).unwrap();
         unsafe {
-            self.device.handle()
-                .queue_submit(self.queue.handle(), std::slice::from_ref(&submit_info), current_fence.handle())
+            self.device
+                .handle()
+                .queue_submit(
+                    self.queue.handle(),
+                    std::slice::from_ref(&submit_info),
+                    current_fence.handle(),
+                )
                 .unwrap();
-            
-            self.device.handle()
-                .wait_for_fences(std::slice::from_ref(&current_fence.handle()), true, u64::MAX)
-                .unwrap();
+
+            current_fence.wait(u64::MAX).unwrap();
             current_fence.reset();
-            
+
             let raw_sc = swapchain.handle();
             let present_info = vk::PresentInfoKHR::default()
                 .wait_semaphores(std::slice::from_ref(&signal_semaphore))
                 .swapchains(std::slice::from_ref(&raw_sc))
                 .image_indices(std::slice::from_ref(&image_index));
-            
-            self.device.swapchain_fns()
-                .queue_present(self.queue.handle(), &present_info)
-                .unwrap();
+
+            let present_result = self
+                .device
+                .swapchain_fns()
+                .queue_present(self.queue.handle(), &present_info);
+
+            match present_result {
+                Ok(_) => {}
+                Err(_) => return,
+            }
         }
-        
-        self.device.wait_idle().unwrap();
+
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 }
@@ -372,14 +399,17 @@ fn create_swapchain(
     queue: &Queue,
     surface: &Surface,
     extent: vk::Extent2D,
-) -> Rc<RefCell<Swapchain>> {
+    old_swapchain: Option<vk::SwapchainKHR>,
+) -> Option<Swapchain> {
+    device.wait_idle().unwrap();
+
     let capabilities = device.get_surface_capabilities(&surface);
     let present_mode = {
         let modes = device.get_surface_present_modes(&surface);
 
         modes
             .into_iter()
-            .find(|x| *x == vk::PresentModeKHR::MAILBOX)
+            .find(|x| *x == vk::PresentModeKHR::MAILBOX || *x == vk::PresentModeKHR::IMMEDIATE)
             .unwrap()
     };
 
@@ -387,7 +417,7 @@ fn create_swapchain(
         .get_surface_formats(&surface)
         .into_iter()
         .find(|x| {
-            x.format == vk::Format::R8G8B8A8_SRGB
+            x.format == vk::Format::B8G8R8A8_SRGB
                 && x.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
         })
         .unwrap();
@@ -412,11 +442,12 @@ fn create_swapchain(
                 queue_indices: vec![queue.family_index()],
                 pre_transform: capabilities.current_transform,
                 composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+                old_swapchain,
                 ..Default::default()
             },
         )
         .expect("Error while create swapchain")
     };
 
-    Rc::new(RefCell::new(swapchain))
+    Some(swapchain)
 }

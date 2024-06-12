@@ -27,7 +27,7 @@ impl Image {
     pub fn sampler(&self) -> Option<vk::Sampler> {
         self.sampler
     }
-    
+
     pub fn extent(&self) -> vk::Extent3D {
         self.extent
     }

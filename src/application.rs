@@ -1,11 +1,10 @@
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
-use winit::window::{Window, WindowButtons, WindowId};
+use winit::window::{Window, WindowId};
 
-use crate::APP_NAME;
 use crate::graphics::GraphicsState;
+use crate::APP_NAME;
 
 #[derive(Debug, Default)]
 pub struct App {
@@ -21,14 +20,11 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attributes = Window::default_attributes()
-            .with_title(APP_NAME)
-            .with_transparent(true)
-            .with_resizable(false)
-            .with_inner_size(PhysicalSize { width: 800, height: 600 })
-            .with_enabled_buttons(WindowButtons::MINIMIZE | WindowButtons::CLOSE);
+        let window_attributes = Window::default_attributes().with_title(APP_NAME);
 
-        let window = event_loop.create_window(window_attributes).expect("");
+        let window = event_loop
+            .create_window(window_attributes)
+            .expect("Error while create window");
 
         let graphics_state = GraphicsState::new(&window);
 
@@ -45,10 +41,13 @@ impl ApplicationHandler for App {
             None => return,
             Some(state) => state,
         };
-        
+
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
+            }
+            WindowEvent::Resized(size) => {
+                graphics_state.resize(size);
             }
             WindowEvent::RedrawRequested => {
                 graphics_state.render();

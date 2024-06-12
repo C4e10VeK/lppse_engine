@@ -14,10 +14,10 @@ const APP_NAME: &str = env!("CARGO_PKG_NAME");
 fn main() {
     init_logger();
 
-    log::info!("Begin launch");
-    let event_loop = EventLoop::builder().build().unwrap();
+    let event_loop = create_event_loop();
     let mut app = App::new();
 
+    log::info!("Begin launch");
     event_loop.run_app(&mut app).unwrap();
     log::info!("end launch");
 }
@@ -27,4 +27,14 @@ fn init_logger() {
     let env_log = env_logger::Env::new().filter("LPPS_LOG");
 
     env_logger::init_from_env(env_log);
+}
+
+#[cfg(target_os = "linux")]
+fn create_event_loop() -> EventLoop<()> {
+    EventLoop::builder().build().unwrap()
+}
+
+#[cfg(target_os = "windows")]
+fn create_event_loop() -> EventLoop<()> {
+    EventLoop::new().unwrap()
 }

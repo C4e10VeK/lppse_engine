@@ -47,13 +47,13 @@ impl SwapchainImage {
 
         Self(image_internal)
     }
-    
+
     pub fn destroy(&self) {
         if let Some(sampler) = self.sampler {
             self.device.destroy(sampler);
         }
         self.device.destroy(self.image_view);
-    } 
+    }
 }
 
 impl Deref for SwapchainImage {

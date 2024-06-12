@@ -2,8 +2,8 @@ use ash::prelude::VkResult;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
-use crate::graphics::surface::Surface;
 use crate::debug_log;
+use crate::graphics::surface::Surface;
 use ash::vk;
 
 use super::instance::Instance;
@@ -39,15 +39,15 @@ impl Device {
             "VK_KHR_dynamic_rendering".to_owned(),
         ]
     }
-    
+
     pub fn handle(&self) -> ash::Device {
         self.handle.clone()
     }
-    
+
     pub fn instance(&self) -> Rc<Instance> {
         self.instance.clone()
     }
-    
+
     pub fn swapchain_fns(&self) -> ash::khr::swapchain::Device {
         self.swapchain_fns.clone()
     }
@@ -73,7 +73,7 @@ impl Device {
     pub fn get_swapchain_images(&self, swapchain: vk::SwapchainKHR) -> VkResult<Vec<vk::Image>> {
         unsafe { self.swapchain_fns.get_swapchain_images(swapchain) }
     }
-    
+
     pub fn wait_idle(&self) -> VkResult<()> {
         unsafe { self.handle.device_wait_idle() }
     }
@@ -116,7 +116,7 @@ pub struct Queue {
 }
 
 impl Queue {
-    fn new(handle: vk::Queue,  device: Rc<Device>, family_index: u32, index: u32) -> Self {
+    fn new(handle: vk::Queue, device: Rc<Device>, family_index: u32, index: u32) -> Self {
         Self {
             handle,
             device,
@@ -170,13 +170,13 @@ pub struct DeviceBuilder<'a> {
     pub queues: Vec<QueueDescription>,
 }
 
-impl<'a> Default for DeviceBuilder<'a>  {
+impl<'a> Default for DeviceBuilder<'a> {
     fn default() -> Self {
         Self {
             extensions: Device::default_extensions(),
             features: vk::PhysicalDeviceFeatures::default(),
             extends: Vec::default(),
-            queues: Vec::default()
+            queues: Vec::default(),
         }
     }
 }

@@ -3,7 +3,7 @@ use crate::debug_log;
 use ash::vk;
 use std::ffi::c_void;
 use std::fmt::{Debug, Formatter};
-use std::panic::{catch_unwind, AssertUnwindSafe, RefUnwindSafe};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::rc::Rc;
 
 pub struct DebugUtils {

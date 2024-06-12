@@ -16,7 +16,7 @@ impl Semaphore {
 
         Ok(Self { handle, device })
     }
-    
+
     pub fn handle(&self) -> vk::Semaphore {
         self.handle
     }
@@ -36,6 +36,7 @@ impl DeviceCreateExtend<vk::SemaphoreCreateInfo<'_>, vk::Semaphore> for Device {
 
 impl DeviceDestroyExtend<vk::Semaphore> for Device {
     fn destroy(&self, vk_struct: vk::Semaphore) {
+        self.wait_idle().unwrap();
         unsafe {
             self.handle().destroy_semaphore(vk_struct, None);
         }
