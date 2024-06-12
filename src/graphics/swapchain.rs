@@ -2,7 +2,6 @@ use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
 use super::surface::Surface;
 use super::synchronization::semaphore::Semaphore;
 use super::texture::swapchain_image::SwapchainImage;
-use crate::debug_log;
 use crate::utils::IntoExtent3D;
 use ash::prelude::VkResult;
 use ash::vk;
@@ -101,7 +100,6 @@ impl Swapchain {
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
-        debug_log!(stringify!(Swapchain::drop()));
         for image in &self.images {
             image.destroy();
         }

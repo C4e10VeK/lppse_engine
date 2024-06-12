@@ -6,6 +6,7 @@
 - [X] Vulkan image wrapper
   - [X] Image view creation
 - [ ] Rendering commands
-  - [ ] Synchronization (semaphore, fence)
+  - [X] Synchronization (semaphore, fence)
   - [ ] Frames change
   - [ ] Dynamic rendering
+  - [ ] Command write

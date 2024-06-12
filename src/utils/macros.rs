@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! debug_exec {
     ($a:expr) => {
-        if cfg!(feature = "gfx_debug_msg") {
+        if cfg!(debug_assertions) {
             $a
         }
     };
