@@ -10,9 +10,9 @@ use super::instance::Instance;
 
 pub struct Device {
     handle: ash::Device,
-    instance: Rc<Instance>,
+    _instance: Rc<Instance>,
     swapchain_fns: ash::khr::swapchain::Device,
-    dynamic_rendering_fns: ash::khr::dynamic_rendering::Device,
+    _dynamic_rendering_fns: ash::khr::dynamic_rendering::Device,
     physical_device: vk::PhysicalDevice,
 }
 
@@ -26,9 +26,9 @@ impl Device {
     ) -> Self {
         Self {
             handle,
-            instance,
+            _instance: instance,
             swapchain_fns,
-            dynamic_rendering_fns,
+            _dynamic_rendering_fns: dynamic_rendering_fns,
             physical_device,
         }
     }
@@ -38,18 +38,6 @@ impl Device {
             "VK_KHR_swapchain".to_owned(),
             "VK_KHR_dynamic_rendering".to_owned(),
         ]
-    }
-
-    pub fn handle(&self) -> ash::Device {
-        self.handle.clone()
-    }
-
-    pub fn instance(&self) -> Rc<Instance> {
-        self.instance.clone()
-    }
-
-    pub fn swapchain_fns(&self) -> ash::khr::swapchain::Device {
-        self.swapchain_fns.clone()
     }
 
     pub fn get_surface_capabilities(&self, surface: &Surface) -> vk::SurfaceCapabilitiesKHR {
@@ -99,11 +87,25 @@ impl Drop for Device {
     }
 }
 
-pub trait DeviceCreateExtend<TInfo, TTarget> {
+pub trait VulkanDevice {
+    fn handle(&self) -> ash::Device;
+    fn swapchain_fns(&self) -> ash::khr::swapchain::Device;
+}
+
+impl VulkanDevice for Device {
+    fn handle(&self) -> ash::Device {
+        self.handle.clone()
+    }
+    fn swapchain_fns(&self) -> ash::khr::swapchain::Device {
+        self.swapchain_fns.clone()
+    }
+}
+
+pub trait DeviceCreateExtend<TInfo, TTarget>: VulkanDevice {
     fn create(&self, create_info: &TInfo) -> VkResult<TTarget>;
 }
 
-pub trait DeviceDestroyExtend<T> {
+pub trait DeviceDestroyExtend<T>: VulkanDevice {
     fn destroy(&self, vk_struct: T);
 }
 
@@ -131,6 +133,22 @@ impl Queue {
 
     pub fn family_index(&self) -> u32 {
         self.family_index
+    }
+
+    pub fn submit(&self, submits: &[vk::SubmitInfo<'_>], fence: vk::Fence) -> VkResult<()> {
+        unsafe {
+            self.device
+                .handle()
+                .queue_submit(self.handle, submits, fence)
+        }
+    }
+
+    pub fn present(&self, present_info: vk::PresentInfoKHR<'_>) -> VkResult<bool> {
+        unsafe {
+            self.device
+                .swapchain_fns()
+                .queue_present(self.handle, &present_info)
+        }
     }
 }
 
@@ -304,13 +322,6 @@ impl QueueDescription {
 
 pub trait DeviceExtensionPush {
     fn push_extension(self, extension_name: impl Into<String>) -> Self;
-}
-
-impl DeviceExtensionPush for Vec<String> {
-    fn push_extension(mut self, extension_name: impl Into<String>) -> Self {
-        self.push(extension_name.into());
-        self
-    }
 }
 
 impl DeviceExtensionPush for DeviceBuilder<'_> {

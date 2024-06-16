@@ -1,4 +1,4 @@
-use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
+use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice};
 use ash::prelude::VkResult;
 use ash::vk;
 use std::rc::Rc;

@@ -1,10 +1,13 @@
 use self::{
     debug_utils::{DebugUtils, DebugUtilsBuilder},
-    device::{Device, DeviceBuilder, Queue, QueueDescription},
+    device::{Device, DeviceBuilder, Queue, QueueDescription, VulkanDevice},
     instance::{Instance, InstanceBuilder},
     surface::Surface,
     swapchain::{Swapchain, SwapchainDescription, SwapchainImageDescription},
-    synchronization::{fence::Fence, semaphore::Semaphore},
+    sync::{
+        fence::Fence, present_task, semaphore::Semaphore, submit_task, GPUTask, PresentInfo,
+        SubmitInfo, TaskRunner,
+    },
 };
 use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};
 use crate::utils::gfx::enumerate_required_extensions;
@@ -18,10 +21,10 @@ mod device;
 mod instance;
 mod surface;
 mod swapchain;
-mod synchronization;
+mod sync;
 mod texture;
 
-const MAX_FRAMES_IN_FLIGHT: u32 = 2;
+const MAX_FRAMES_IN_FLIGHT: u32 = 3;
 
 #[derive(Debug)]
 pub struct GraphicsState {
@@ -30,12 +33,12 @@ pub struct GraphicsState {
     device: Rc<Device>,
     surface: Rc<Surface>,
     _debug_utils: Option<DebugUtils>,
-    instance: Rc<Instance>,
+    _instance: Rc<Instance>,
 
     present_semaphores: Vec<Semaphore>,
     render_semaphores: Vec<Semaphore>,
     fences: Vec<Fence>,
-    command_pools: Vec<vk::CommandPool>,
+    _command_pools: Vec<vk::CommandPool>,
     command_buffers: Vec<vk::CommandBuffer>,
     current_frame: u32,
 }
@@ -46,7 +49,7 @@ impl GraphicsState {
 
         let _debug_utils = if cfg!(feature = "gfx_debug_msg") {
             Some(
-                DebugUtilsBuilder::default()
+                DebugUtilsBuilder::new()
                     .build(instance.clone())
                     .expect("Error while create DebugUtilsMessenger"),
             )
@@ -101,34 +104,21 @@ impl GraphicsState {
 
         let queue = queues.next().unwrap();
 
-        // let swapchain = create_swapchain(
-        //     device.clone(),
-        //     &queue,
-        //     &surface,
-        //     window.inner_size().into_extent(),
-        //     None,
-        // );
-
         let (present_semaphores, render_semaphores) = {
-            let mut present_semaphores = vec![];
-            let mut render_semaphores = vec![];
-            for _ in 0..MAX_FRAMES_IN_FLIGHT {
-                present_semaphores.push(Semaphore::new(device.clone()).unwrap());
-                render_semaphores.push(Semaphore::new(device.clone()).unwrap());
-            }
+            let present_semaphores = (0..MAX_FRAMES_IN_FLIGHT)
+                .map(|_| Semaphore::new(device.clone()).unwrap())
+                .collect();
+
+            let render_semaphores = (0..MAX_FRAMES_IN_FLIGHT)
+                .map(|_| Semaphore::new(device.clone()).unwrap())
+                .collect();
 
             (present_semaphores, render_semaphores)
         };
 
-        let fences = {
-            let mut fences = vec![];
-
-            for _ in 0..MAX_FRAMES_IN_FLIGHT {
-                fences.push(Fence::new(device.clone(), false).unwrap());
-            }
-
-            fences
-        };
+        let fences = (0..MAX_FRAMES_IN_FLIGHT)
+            .map(|_| Fence::new(device.clone(), false).unwrap())
+            .collect();
 
         let command_pool_info = vk::CommandPoolCreateInfo::default()
             .queue_family_index(queue_family_index)
@@ -166,7 +156,7 @@ impl GraphicsState {
         };
 
         Self {
-            instance,
+            _instance: instance,
             _debug_utils,
             surface,
             device,
@@ -175,34 +165,47 @@ impl GraphicsState {
             present_semaphores,
             render_semaphores,
             fences,
-            command_pools,
+            _command_pools: command_pools,
             command_buffers,
             current_frame: 0,
         }
     }
 
     pub(crate) fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        self.swapchain = create_swapchain(
+        let swapchain = create_swapchain(
             self.device.clone(),
-            &self.queue,
             &self.surface,
             new_size.into_extent(),
             self.swapchain.as_ref().map(|t| t.handle()),
         );
+
+        self.swapchain = Some(swapchain);
     }
 
     pub fn render(&mut self) {
+        let current_fence = &self.fences[self.current_frame as usize];
+
         let swapchain = self.swapchain.as_ref().unwrap();
 
         let image_result = swapchain.get_current_image(
-            self.present_semaphores
-                .get(self.current_frame as usize)
-                .unwrap(),
+            self.present_semaphores[self.current_frame as usize].handle(),
+            Some(current_fence.handle()),
         );
 
+        current_fence.wait(u64::MAX).unwrap();
+        current_fence.reset();
+
         let (current_image, image_index) = match image_result {
-            Ok(value) => value,
-            Err(_) => return,
+            Ok((current_image, image_index, suboptimal)) => {
+                if suboptimal {
+                    return;
+                }
+
+                (current_image, image_index)
+            }
+            Err(_) => {
+                return;
+            }
         };
 
         let current_command_buffer = self.command_buffers[self.current_frame as usize];
@@ -253,8 +256,8 @@ impl GraphicsState {
                 });
 
             let render_extent = vk::Extent2D {
-                width: current_image.extent().width,
-                height: current_image.extent().height,
+                width: swapchain.extent().width,
+                height: swapchain.extent().height,
             };
             let rendering_info = vk::RenderingInfoKHR::default()
                 .render_area(vk::Rect2D {
@@ -304,52 +307,48 @@ impl GraphicsState {
                 .unwrap();
         }
 
-        let wait_semaphore = self
-            .present_semaphores
-            .get(self.current_frame as usize)
-            .unwrap()
-            .handle();
-        let signal_semaphore = self
-            .render_semaphores
-            .get(self.current_frame as usize)
-            .unwrap()
-            .handle();
-        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+        let wait_semaphore = self.present_semaphores[self.current_frame as usize].handle();
+        let signal_semaphore = self.render_semaphores[self.current_frame as usize].handle();
+        let wait_dst_stage_mask = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
 
-        let submit_info = vk::SubmitInfo::default()
-            .wait_semaphores(std::slice::from_ref(&wait_semaphore))
-            .wait_dst_stage_mask(&wait_stages)
-            .command_buffers(std::slice::from_ref(&current_command_buffer))
-            .signal_semaphores(std::slice::from_ref(&signal_semaphore));
+        let submit_task = submit_task::submit(
+            self.queue.clone(),
+            SubmitInfo {
+                signal_semaphore,
+                wait_semaphore,
+                wait_dst_stage_mask,
+                command_buffers: vec![current_command_buffer],
+            },
+            Some(current_fence.as_shared()),
+        )
+        .run_task()
+        .unwrap();
 
-        let current_fence = self.fences.get(self.current_frame as usize).unwrap();
-        unsafe {
-            self.device
-                .handle()
-                .queue_submit(
-                    self.queue.handle(),
-                    std::slice::from_ref(&submit_info),
-                    current_fence.handle(),
-                )
-                .unwrap();
+        submit_task.wait().unwrap();
 
-            current_fence.wait(u64::MAX).unwrap();
-            current_fence.reset();
+        let raw_sc = swapchain.handle();
 
-            let raw_sc = swapchain.handle();
-            let present_info = vk::PresentInfoKHR::default()
-                .wait_semaphores(std::slice::from_ref(&signal_semaphore))
-                .swapchains(std::slice::from_ref(&raw_sc))
-                .image_indices(std::slice::from_ref(&image_index));
+        let present_task = present_task::present(
+            self.queue.clone(),
+            PresentInfo {
+                wait_semaphore: signal_semaphore,
+                swapchain: raw_sc,
+                image_index,
+            },
+        )
+        .run_task()
+        .unwrap();
 
-            let present_result = self
-                .device
-                .swapchain_fns()
-                .queue_present(self.queue.handle(), &present_info);
+        let present_result = present_task.wait_result();
 
-            match present_result {
-                Ok(_) => {}
-                Err(_) => return,
+        match present_result {
+            Ok(suboptimal) => {
+                if suboptimal {
+                    return;
+                }
+            }
+            Err(_) => {
+                return;
             }
         }
 
@@ -394,13 +393,13 @@ fn create_instance(window: &winit::window::Window) -> Rc<Instance> {
         .expect("Error while create instance")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_swapchain(
     device: Rc<Device>,
-    queue: &Queue,
     surface: &Surface,
     extent: vk::Extent2D,
     old_swapchain: Option<vk::SwapchainKHR>,
-) -> Option<Swapchain> {
+) -> Swapchain {
     device.wait_idle().unwrap();
 
     let capabilities = device.get_surface_capabilities(&surface);
@@ -439,7 +438,6 @@ fn create_swapchain(
                 image_description,
                 present_mode,
                 min_image_count: capabilities.min_image_count + 1,
-                queue_indices: vec![queue.family_index()],
                 pre_transform: capabilities.current_transform,
                 composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
                 old_swapchain,
@@ -449,5 +447,5 @@ fn create_swapchain(
         .expect("Error while create swapchain")
     };
 
-    Some(swapchain)
+    swapchain
 }

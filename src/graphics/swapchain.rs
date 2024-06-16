@@ -1,6 +1,7 @@
-use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
+use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice};
 use super::surface::Surface;
-use super::synchronization::semaphore::Semaphore;
+use super::sync::fence::SharedFence;
+use super::sync::{GPUResult, GPUTask, TaskResult};
 use super::texture::swapchain_image::SwapchainImage;
 use crate::utils::IntoExtent3D;
 use ash::prelude::VkResult;
@@ -34,7 +35,6 @@ impl Swapchain {
                 .image_array_layers(description.image_description.array_layers)
                 .image_usage(description.image_description.image_usage)
                 .image_sharing_mode(description.image_description.sharing_mode)
-                .queue_family_indices(&description.queue_indices)
                 .pre_transform(description.pre_transform)
                 .composite_alpha(description.composite_alpha)
                 .present_mode(description.present_mode);
@@ -79,22 +79,32 @@ impl Swapchain {
         self.handle
     }
 
+    pub fn extent(&self) -> vk::Extent2D {
+        self.extent
+    }
+
     pub fn get_current_image(
         &self,
-        present_semaphore: &Semaphore,
-    ) -> VkResult<(SwapchainImage, u32)> {
-        let (index, _suboptimal) = unsafe {
+        present_semaphore: vk::Semaphore,
+        fence: Option<vk::Fence>,
+    ) -> VkResult<(SwapchainImage, u32, bool)> {
+        let fence = match fence {
+            Some(value) => value,
+            None => vk::Fence::null(),
+        };
+
+        let (index, suboptimal) = unsafe {
             self.device.swapchain_fns().acquire_next_image(
                 self.handle,
                 u64::MAX,
-                present_semaphore.handle(),
-                vk::Fence::null(),
+                present_semaphore,
+                fence,
             )?
         };
 
         let image = self.images[index as usize].clone();
 
-        Ok((image, index))
+        Ok((image, index, suboptimal))
     }
 }
 
@@ -135,7 +145,6 @@ pub struct SwapchainImageDescription {
 pub struct SwapchainDescription {
     pub min_image_count: u32,
     pub image_description: SwapchainImageDescription,
-    pub queue_indices: Vec<u32>,
     pub pre_transform: vk::SurfaceTransformFlagsKHR,
     pub composite_alpha: vk::CompositeAlphaFlagsKHR,
     pub present_mode: vk::PresentModeKHR,

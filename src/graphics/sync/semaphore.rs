@@ -1,4 +1,5 @@
-use crate::graphics::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
+use crate::debug_log;
+use crate::graphics::device::{Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice};
 use ash::prelude::VkResult;
 use ash::vk;
 use std::rc::Rc;
@@ -24,7 +25,23 @@ impl Semaphore {
 
 impl Drop for Semaphore {
     fn drop(&mut self) {
+        debug_log!(stringify!(Semaphore::drop()));
         self.device.destroy(self.handle);
+    }
+}
+
+#[derive(Debug)]
+pub struct SharedSemaphore {
+    handle: vk::Semaphore,
+}
+
+impl SharedSemaphore {
+    fn new(handle: vk::Semaphore) -> Self {
+        Self { handle }
+    }
+
+    pub fn handle(&self) -> vk::Semaphore {
+        self.handle
     }
 }
 

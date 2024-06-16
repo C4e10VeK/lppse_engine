@@ -1,5 +1,6 @@
 use application::App;
 use winit::event_loop::EventLoop;
+use winit::platform::x11::EventLoopBuilderExtX11;
 
 mod application;
 mod graphics;
@@ -8,7 +9,6 @@ mod utils;
 const APP_MAJOR_VERSION: &str = env!("CARGO_PKG_VERSION_MAJOR");
 const APP_MINOR_VERSION: &str = env!("CARGO_PKG_VERSION_MINOR");
 const APP_PATCH_VERSION: &str = env!("CARGO_PKG_VERSION_PATCH");
-
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 
 fn main() {
@@ -31,7 +31,7 @@ fn init_logger() {
 
 #[cfg(target_os = "linux")]
 fn create_event_loop() -> EventLoop<()> {
-    EventLoop::builder().build().unwrap()
+    EventLoop::builder().with_x11().build().unwrap()
 }
 
 #[cfg(target_os = "windows")]

@@ -1,4 +1,6 @@
-use crate::graphics::device::{Device, DeviceCreateExtend, DeviceDestroyExtend};
+use crate::graphics::device::{
+    self, Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice,
+};
 use ash::prelude::VkResult;
 use ash::vk;
 use std::rc::Rc;
@@ -39,11 +41,48 @@ impl Fence {
             .reset(self.handle)
             .expect("Error while reset fence");
     }
+
+    pub fn as_shared(&self) -> SharedFence {
+        SharedFence::from(self)
+    }
 }
 
 impl Drop for Fence {
     fn drop(&mut self) {
         self.device.destroy(self.handle);
+    }
+}
+
+#[derive(Debug)]
+pub struct SharedFence {
+    handle: vk::Fence,
+    device: Rc<Device>,
+}
+
+impl SharedFence {
+    pub fn handle(&self) -> vk::Fence {
+        self.handle
+    }
+
+    pub fn from(fence: &Fence) -> Self {
+        Self {
+            handle: fence.handle,
+            device: fence.device.clone(),
+        }
+    }
+
+    pub fn wait(&self, timeout: u64) -> VkResult<()> {
+        unsafe {
+            self.device
+                .handle()
+                .wait_for_fences(std::slice::from_ref(&self.handle), true, timeout)
+        }
+    }
+
+    pub fn reset(&self) {
+        self.device
+            .reset(self.handle)
+            .expect("Error while reset fence");
     }
 }
 

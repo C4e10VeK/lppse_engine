@@ -26,16 +26,15 @@ impl Instance {
         self.entry.clone()
     }
 
-    pub fn enumerate_physical_devices(
-        self: &Rc<Self>,
-    ) -> ash::prelude::VkResult<Vec<PhysicalDevice>> {
+    pub fn enumerate_physical_devices<'a>(
+        self: &'a Rc<Self>,
+    ) -> ash::prelude::VkResult<impl ExactSizeIterator<Item = PhysicalDevice> + 'a> {
         let result = unsafe { self.handle.enumerate_physical_devices() };
 
         result.map(|physical_devices| {
             physical_devices
                 .into_iter()
                 .map(|pd| PhysicalDevice::new(pd, self.clone()))
-                .collect()
         })
     }
 
@@ -187,21 +186,6 @@ impl InstanceBuilder {
                 .create_instance(&instance_info, None)
                 .map_err(|e| InstanceBuildError::InstanceCreate(e))?
         };
-
-        let layers = unsafe { entry.enumerate_instance_layer_properties().unwrap() };
-        let layers_names: Vec<_> = layers
-            .into_iter()
-            .map(|x| unsafe {
-                std::ffi::CStr::from_ptr(x.layer_name.as_ptr())
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-            })
-            .collect();
-
-        for x in layers_names {
-            log::info!(target: "rust_engine", "{x}");
-        }
 
         Ok(Rc::new(Instance::new(entry, instance)))
     }
