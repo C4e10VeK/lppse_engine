@@ -1,4 +1,4 @@
-use crate::debug_log;
+use crate::gfx_debug_log;
 use crate::graphics::device::{Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice};
 use ash::prelude::VkResult;
 use ash::vk;
@@ -25,7 +25,7 @@ impl Semaphore {
 
 impl Drop for Semaphore {
     fn drop(&mut self) {
-        debug_log!(stringify!(Semaphore::drop()));
+        gfx_debug_log!(stringify!(Semaphore::drop()));
         self.device.destroy(self.handle);
     }
 }

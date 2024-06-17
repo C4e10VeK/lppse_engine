@@ -1,6 +1,4 @@
-use crate::graphics::device::{
-    Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice,
-};
+use crate::graphics::device::{Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice};
 use ash::prelude::VkResult;
 use ash::vk;
 use std::rc::Rc;

@@ -1,5 +1,5 @@
 use super::instance::Instance;
-use crate::debug_log;
+use crate::gfx_debug_log;
 use ash::vk;
 use std::ffi::c_void;
 use std::fmt::{Debug, Formatter};
@@ -38,7 +38,7 @@ impl Debug for DebugUtils {
 
 impl Drop for DebugUtils {
     fn drop(&mut self) {
-        debug_log!(stringify!(DebugUtils::drop()));
+        gfx_debug_log!(stringify!(DebugUtils::drop()));
         unsafe {
             self.debug_instance
                 .destroy_debug_utils_messenger(self.debug_utils_messenger, None);
@@ -147,7 +147,7 @@ pub(self) unsafe extern "system" fn raw_debug_callback(
                 log::error!(target: "rust_engine", "[{:?}::{:?}]: {}", message_severity, message_types, data.message)
             }
             _ => {
-                debug_log!(
+                gfx_debug_log!(
                     "[{:?}::{:?}]: {}",
                     message_severity,
                     message_types,

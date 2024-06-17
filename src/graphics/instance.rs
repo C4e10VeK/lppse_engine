@@ -1,5 +1,5 @@
 use super::device::PhysicalDevice;
-use crate::debug_log;
+use crate::gfx_debug_log;
 use ash::vk;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
@@ -76,7 +76,7 @@ impl Instance {
 
 impl Drop for Instance {
     fn drop(&mut self) {
-        debug_log!(stringify!(Instance::drop()));
+        gfx_debug_log!(stringify!(Instance::drop()));
         unsafe {
             self.handle.destroy_instance(None);
         }

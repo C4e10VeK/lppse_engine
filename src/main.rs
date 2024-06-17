@@ -1,3 +1,4 @@
+// TODO: remove this for check unused
 #![allow(dead_code)]
 
 use application::App;
@@ -26,17 +27,19 @@ fn main() {
 
 #[inline]
 fn init_logger() {
-    let env_log = env_logger::Env::new().filter("LPPS_LOG");
+    let env_log = env_logger::Env::new().filter_or("LPPS_LOG", "DEBUG");
 
     env_logger::init_from_env(env_log);
 }
 
 #[cfg(target_os = "linux")]
+#[inline]
 fn create_event_loop() -> EventLoop<()> {
     EventLoop::builder().with_x11().build().unwrap()
 }
 
 #[cfg(target_os = "windows")]
+#[inline]
 fn create_event_loop() -> EventLoop<()> {
     EventLoop::new().unwrap()
 }

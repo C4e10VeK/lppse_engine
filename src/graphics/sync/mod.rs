@@ -25,10 +25,10 @@ pub trait GPUTask {
     fn wait_result(&self) -> TaskResult<Self::Output>;
 }
 
-pub type TaskResult<T> = Result<T, GPUResult>;
+pub type TaskResult<T> = Result<T, GPUTaskError>;
 
 #[derive(Debug, Clone, Copy)]
-pub enum GPUResult {
+pub enum GPUTaskError {
     SubmitError,
     PresentError,
     AcquireError,

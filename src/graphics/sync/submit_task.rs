@@ -1,24 +1,24 @@
 use ash::vk;
 
-use crate::graphics::{device::Queue, sync::GPUResult};
+use crate::graphics::{device::Queue, sync::GPUTaskError};
 
-use super::{fence::SharedFence, GPUTask, SubmitInfo, GPUTaskRunner};
+use super::{fence::SharedFence, GPUTask, GPUTaskRunner, SubmitInfo};
 
-pub fn submit(queue: Queue, submit_info: SubmitInfo, fence: Option<SharedFence>) -> Submiter {
-    Submiter {
+pub fn submit(queue: Queue, submit_info: SubmitInfo, fence: Option<SharedFence>) -> SubmitTaskRunner {
+    SubmitTaskRunner {
         queue,
         submit_info,
         fence,
     }
 }
 
-pub struct Submiter {
+pub struct SubmitTaskRunner {
     queue: Queue,
     submit_info: SubmitInfo,
     fence: Option<SharedFence>,
 }
 
-impl GPUTaskRunner<SubmitTask> for Submiter {
+impl GPUTaskRunner<SubmitTask> for SubmitTaskRunner {
     fn run_task(self) -> super::TaskResult<SubmitTask> {
         let submit_info = self.submit_info.to_vk();
 
@@ -29,7 +29,7 @@ impl GPUTaskRunner<SubmitTask> for Submiter {
 
         self.queue
             .submit(std::slice::from_ref(&submit_info), fence)
-            .map_err(|_| GPUResult::SubmitError)?;
+            .map_err(|_| GPUTaskError::SubmitError)?;
 
         Ok(SubmitTask { fence: self.fence })
     }
@@ -45,7 +45,7 @@ impl GPUTask for SubmitTask {
 
     fn wait_result(&self) -> super::TaskResult<Self::Output> {
         if let Some(fence) = self.fence.as_ref() {
-            fence.wait(u64::MAX).map_err(|_| GPUResult::WaitError)?;
+            fence.wait(u64::MAX).map_err(|_| GPUTaskError::WaitError)?;
             fence.reset();
         }
 

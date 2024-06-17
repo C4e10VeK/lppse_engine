@@ -5,8 +5,8 @@ use self::{
     surface::Surface,
     swapchain::{Swapchain, SwapchainDescription, SwapchainImageDescription},
     sync::{
-        fence::Fence, present_task, semaphore::Semaphore, submit_task, GPUTask, PresentInfo,
-        SubmitInfo, GPUTaskRunner,
+        fence::Fence, present_task, semaphore::Semaphore, submit_task, GPUTask, GPUTaskRunner,
+        PresentInfo, SubmitInfo,
     },
 };
 use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};

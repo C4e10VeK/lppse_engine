@@ -2,7 +2,7 @@ use ash::prelude::VkResult;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
-use crate::debug_log;
+use crate::gfx_debug_log;
 use crate::graphics::surface::Surface;
 use ash::vk;
 
@@ -79,7 +79,7 @@ impl Debug for Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        debug_log!(stringify!(Device::drop()));
+        gfx_debug_log!(stringify!(Device::drop()));
         unsafe {
             self.wait_idle().unwrap();
             self.handle.destroy_device(None);

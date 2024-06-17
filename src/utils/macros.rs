@@ -1,5 +1,5 @@
 #[macro_export]
-macro_rules! debug_exec {
+macro_rules! gfx_debug_exec {
     ($a:expr) => {
         if cfg!(feature = "gfx_debug_msg") {
             $a;
@@ -8,8 +8,8 @@ macro_rules! debug_exec {
 }
 
 #[macro_export]
-macro_rules! debug_log {
+macro_rules! gfx_debug_log {
     ($($arg:tt)+) => {
-        crate::debug_exec!(log::debug!(target: "rust_engine", $($arg)+))
+        crate::gfx_debug_exec!(log::debug!(target: "rust_engine::graphics", $($arg)+))
     };
 }
