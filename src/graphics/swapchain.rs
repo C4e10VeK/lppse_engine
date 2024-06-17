@@ -1,7 +1,5 @@
 use super::device::{Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice};
 use super::surface::Surface;
-use super::sync::fence::SharedFence;
-use super::sync::{GPUResult, GPUTask, TaskResult};
 use super::texture::swapchain_image::SwapchainImage;
 use crate::utils::IntoExtent3D;
 use ash::prelude::VkResult;

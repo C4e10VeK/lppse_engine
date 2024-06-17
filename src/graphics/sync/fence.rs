@@ -1,5 +1,5 @@
 use crate::graphics::device::{
-    self, Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice,
+    Device, DeviceCreateExtend, DeviceDestroyExtend, VulkanDevice,
 };
 use ash::prelude::VkResult;
 use ash::vk;

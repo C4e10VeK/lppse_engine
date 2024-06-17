@@ -1,12 +1,10 @@
 use super::device::PhysicalDevice;
 use super::instance::Instance;
-use crate::graphics::swapchain::Swapchain;
 use crate::{debug_log, utils};
 use ash::prelude::VkResult;
 use ash::vk;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use std::sync::RwLock;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 pub struct Surface {
@@ -28,7 +26,6 @@ impl Surface {
         let surface_fn = ash::khr::surface::Instance::new(&instance.entry(), &instance.handle());
 
         Ok(Self {
-            // swapchain: RwLock::new(None),
             handle,
             surface_fn,
             instance,
@@ -82,14 +79,6 @@ impl Surface {
                 .get_physical_device_surface_present_modes(physical_device, self.handle)
         }
     }
-
-    // pub fn configure(&self, device: &Rc<super::device::Device>, extent: vk::Extent2D) {
-    //     let mut sw = self.swapchain.write().unwrap();
-    //
-    //     let old_swapchain = sw.as_ref().map(|x| x.handle());
-    //
-    //     *sw = Some(super::create_swapchain(device.clone(), self, extent, old_swapchain))
-    // }
 }
 
 impl Debug for Surface {

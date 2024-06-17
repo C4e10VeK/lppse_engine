@@ -1,6 +1,6 @@
 use crate::graphics::device::Queue;
 
-use super::{GPUResult, GPUTask, PresentInfo, TaskResult, TaskRunner};
+use super::{GPUResult, GPUTask, PresentInfo, TaskResult, GPUTaskRunner};
 
 pub fn present(queue: Queue, present_info: PresentInfo) -> Presenter {
     Presenter {
@@ -14,7 +14,7 @@ pub struct Presenter {
     present_info: PresentInfo,
 }
 
-impl TaskRunner<PresentTask> for Presenter {
+impl GPUTaskRunner<PresentTask> for Presenter {
     fn run_task(self) -> TaskResult<PresentTask> {
         let present_info = self.present_info.to_vk();
 

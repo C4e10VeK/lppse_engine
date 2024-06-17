@@ -2,7 +2,7 @@ use ash::vk;
 
 use crate::graphics::{device::Queue, sync::GPUResult};
 
-use super::{fence::SharedFence, GPUTask, SubmitInfo, TaskRunner};
+use super::{fence::SharedFence, GPUTask, SubmitInfo, GPUTaskRunner};
 
 pub fn submit(queue: Queue, submit_info: SubmitInfo, fence: Option<SharedFence>) -> Submiter {
     Submiter {
@@ -18,7 +18,7 @@ pub struct Submiter {
     fence: Option<SharedFence>,
 }
 
-impl TaskRunner<SubmitTask> for Submiter {
+impl GPUTaskRunner<SubmitTask> for Submiter {
     fn run_task(self) -> super::TaskResult<SubmitTask> {
         let submit_info = self.submit_info.to_vk();
 

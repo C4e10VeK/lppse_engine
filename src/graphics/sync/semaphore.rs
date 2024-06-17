@@ -30,21 +30,6 @@ impl Drop for Semaphore {
     }
 }
 
-#[derive(Debug)]
-pub struct SharedSemaphore {
-    handle: vk::Semaphore,
-}
-
-impl SharedSemaphore {
-    fn new(handle: vk::Semaphore) -> Self {
-        Self { handle }
-    }
-
-    pub fn handle(&self) -> vk::Semaphore {
-        self.handle
-    }
-}
-
 impl DeviceCreateExtend<vk::SemaphoreCreateInfo<'_>, vk::Semaphore> for Device {
     fn create(&self, create_info: &vk::SemaphoreCreateInfo<'_>) -> VkResult<vk::Semaphore> {
         unsafe { self.handle().create_semaphore(create_info, None) }

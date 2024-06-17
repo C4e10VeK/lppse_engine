@@ -5,7 +5,7 @@ pub mod present_task;
 pub mod semaphore;
 pub mod submit_task;
 
-pub trait TaskRunner<T>
+pub trait GPUTaskRunner<T>
 where
     T: GPUTask,
 {

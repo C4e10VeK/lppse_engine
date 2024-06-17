@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use application::App;
 use winit::event_loop::EventLoop;
 use winit::platform::x11::EventLoopBuilderExtX11;
