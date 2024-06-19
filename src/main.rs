@@ -3,6 +3,7 @@
 
 use application::App;
 use winit::event_loop::EventLoop;
+#[cfg(target_os = "linux")]
 use winit::platform::x11::EventLoopBuilderExtX11;
 
 mod application;

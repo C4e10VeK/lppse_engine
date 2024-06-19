@@ -51,7 +51,7 @@ impl Drop for Fence {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SharedFence {
     handle: vk::Fence,
     device: Rc<Device>,

@@ -5,8 +5,7 @@ use self::{
     surface::Surface,
     swapchain::{Swapchain, SwapchainDescription, SwapchainImageDescription},
     sync::{
-        fence::Fence, present_task, semaphore::Semaphore, submit_task, GPUTask, GPUTaskRunner,
-        PresentInfo, SubmitInfo,
+        fence::Fence, semaphore::Semaphore, submit_task, task_from_runner, GPUTask, SubmitInfo,
     },
 };
 use super::{APP_MAJOR_VERSION, APP_MINOR_VERSION, APP_NAME, APP_PATCH_VERSION};
@@ -311,7 +310,7 @@ impl GraphicsState {
         let signal_semaphore = self.render_semaphores[self.current_frame as usize].handle();
         let wait_dst_stage_mask = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
 
-        let submit_task = submit_task::submit(
+        let submit_runner = submit_task::submit(
             self.queue.clone(),
             SubmitInfo {
                 signal_semaphore,
@@ -320,26 +319,15 @@ impl GraphicsState {
                 command_buffers: vec![current_command_buffer],
             },
             Some(current_fence.as_shared()),
-        )
-        .run_task()
-        .unwrap();
+        );
+
+        let submit_task = task_from_runner(submit_runner).unwrap();
 
         submit_task.wait().unwrap();
 
         let raw_sc = swapchain.handle();
 
-        let present_task = present_task::present(
-            self.queue.clone(),
-            PresentInfo {
-                wait_semaphore: signal_semaphore,
-                swapchain: raw_sc,
-                image_index,
-            },
-        )
-        .run_task()
-        .unwrap();
-
-        let present_result = present_task.wait_result();
+        let present_result = submit_task.then_present(self.queue.clone(), raw_sc, image_index);
 
         match present_result {
             Ok(suboptimal) => {

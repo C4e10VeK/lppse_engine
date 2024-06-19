@@ -1,19 +1,28 @@
 use ash::vk;
 
+use super::device::Queue;
+
 pub mod fence;
-pub mod present_task;
 pub mod semaphore;
 pub mod submit_task;
 
-pub trait GPUTaskRunner<T>
+pub trait GPUTaskRunner {
+    type Output: GPUTask;
+
+    fn run_task(self) -> TaskResult<Self::Output>;
+}
+
+pub fn task_from_runner<T>(runner: impl GPUTaskRunner<Output = T>) -> TaskResult<T>
 where
     T: GPUTask,
 {
-    fn run_task(self) -> TaskResult<T>;
+    runner.run_task()
 }
 
 pub trait GPUTask {
     type Output;
+
+    fn run(&self, queue: Queue) -> TaskResult<()>;
 
     fn wait(&self) -> TaskResult<()> {
         match self.wait_result() {
@@ -23,6 +32,21 @@ pub trait GPUTask {
     }
 
     fn wait_result(&self) -> TaskResult<Self::Output>;
+
+    fn get_signal_semaphore(&self) -> vk::Semaphore;
+
+    fn then_present(&self, queue: Queue, swapchain: vk::SwapchainKHR, image_index: u32) -> TaskResult<bool> {
+        let wait_semaphore = self.get_signal_semaphore();
+
+        let info = PresentInfo {
+            swapchain,
+            image_index,
+            wait_semaphore,
+        };
+
+        queue.present(info.to_vk())
+            .map_err(|_| GPUTaskError::PresentError)
+    }
 }
 
 pub type TaskResult<T> = Result<T, GPUTaskError>;

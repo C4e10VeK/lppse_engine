@@ -4,7 +4,11 @@ use crate::graphics::{device::Queue, sync::GPUTaskError};
 
 use super::{fence::SharedFence, GPUTask, GPUTaskRunner, SubmitInfo};
 
-pub fn submit(queue: Queue, submit_info: SubmitInfo, fence: Option<SharedFence>) -> SubmitTaskRunner {
+pub fn submit(
+    queue: Queue,
+    submit_info: SubmitInfo,
+    fence: Option<SharedFence>,
+) -> SubmitTaskRunner {
     SubmitTaskRunner {
         queue,
         submit_info,
@@ -18,30 +22,47 @@ pub struct SubmitTaskRunner {
     fence: Option<SharedFence>,
 }
 
-impl GPUTaskRunner<SubmitTask> for SubmitTaskRunner {
-    fn run_task(self) -> super::TaskResult<SubmitTask> {
-        let submit_info = self.submit_info.to_vk();
+impl GPUTaskRunner for SubmitTaskRunner {
+    type Output = SubmitTask;
 
-        let fence = match self.fence.as_ref() {
-            Some(value) => value.handle(),
-            None => vk::Fence::null(),
+    fn run_task(self) -> super::TaskResult<Self::Output> {
+        let task = SubmitTask { 
+            info: self.submit_info,
+            fence: self.fence,
         };
 
-        self.queue
-            .submit(std::slice::from_ref(&submit_info), fence)
-            .map_err(|_| GPUTaskError::SubmitError)?;
+        task.run(self.queue)?;
 
-        Ok(SubmitTask { fence: self.fence })
+        Ok(task)
     }
 }
 
 #[derive(Debug)]
 pub struct SubmitTask {
     fence: Option<SharedFence>,
+    info: SubmitInfo,
+}
+
+impl SubmitTask {
+    fn get_raw_fence(&self) -> vk::Fence {
+        match self.fence.clone() {
+            Some(value) => value.handle(),
+            None => vk::Fence::null(),
+        }
+    } 
 }
 
 impl GPUTask for SubmitTask {
     type Output = ();
+
+    fn run(&self, queue: Queue) -> super::TaskResult<()> {
+        let info = self.info.to_vk();
+
+        let fence = self.get_raw_fence();
+
+        queue.submit(std::slice::from_ref(&info), fence)
+            .map_err(|_| GPUTaskError::SubmitError)
+    }
 
     fn wait_result(&self) -> super::TaskResult<Self::Output> {
         if let Some(fence) = self.fence.as_ref() {
@@ -50,5 +71,9 @@ impl GPUTask for SubmitTask {
         }
 
         Ok(())
+    }
+
+    fn get_signal_semaphore(&self) -> vk::Semaphore {
+        self.info.signal_semaphore
     }
 }
